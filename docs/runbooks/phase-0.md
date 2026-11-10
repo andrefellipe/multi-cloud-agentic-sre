@@ -81,16 +81,32 @@ curl -fsSL https://github.com/awslabs/aidlc-workflows/releases/latest/download/i
 aidlc config --harness claude
 aidlc doctor
 git switch -c chore/aidlc-setup
-claude
 ```
 
 `aidlc config` asks for your model provider. Choose your Claude subscription or `amazon-bedrock`; Bedrock settings go in `.claude/settings.local.json`, which isn't committed.
 
-In Claude Code, trust the folder, then ask:
+Add the guardrail hook to `.claude/settings.json` in the same terminal, before you start Claude Code. AI-DLC doesn't let Claude Code edit that file, so this step is yours. Build the merged settings and review the change:
 
-> Merge the hooks in tools/claude-hooks/settings.hooks.json into .claude/settings.json without removing any existing AI-DLC hooks or permissions. Show me the diff, then run bash tools/claude-hooks/test-guard.sh.
+```bash
+merged="$(mktemp)"
+jq --slurpfile add tools/claude-hooks/settings.hooks.json '
+  reduce ($add[0].hooks | to_entries[]) as $event (.;
+    .hooks[$event.key] = [(.hooks[$event.key] // [])[]
+                          | select(tostring | contains("tools/claude-hooks/") | not)]
+                         + $event.value)
+' .claude/settings.json > "$merged"
+diff -u .claude/settings.json "$merged"
+```
 
-Restart Claude Code, then test the guardrail: ask it to run `terraform apply`. The command must be blocked, and a line must appear in `docs/evidence/hook-audit.jsonl`. Commit, open a PR, fill in the template, and merge.
+In the diff, only the `guard-bash.sh` group at the end of `PreToolUse` may change; every AI-DLC hook and permission stays. Then install it, run the hook's tests, and start Claude Code:
+
+```bash
+cp "$merged" .claude/settings.json && rm "$merged"
+bash tools/claude-hooks/test-guard.sh        # expect: 26 passed, 0 failed
+claude
+```
+
+In Claude Code, trust the folder. If it asks you to approve the project's hooks, approve them and restart Claude Code. Then test the guardrail: ask Claude to run `terraform apply`. The command must be blocked, and a line must appear in `docs/evidence/hook-audit.jsonl`. Commit, open a PR, fill in the template, and merge.
 
 ## 5. Inception with AI-DLC (2 or 3 sessions)
 
