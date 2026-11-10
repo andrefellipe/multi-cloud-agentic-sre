@@ -1,0 +1,305 @@
+{
+  "stage": "requirements-analysis",
+  "ids": [
+    {
+      "id": "REQ-001",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-002",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-003",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-004",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-005",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-006",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-007",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-008",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-009",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-010",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-011",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-012",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-013",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-014",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-015",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-020",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-021",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-022",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-023",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-024",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-025",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-026",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-030",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-031",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-032",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-033",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-034",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-035",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-040",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-041",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-050",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-051",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-052",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-053",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-054",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-055",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-060",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-061",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-062",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-063",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-064",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-065",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-070",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-071",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-072",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-073",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-080",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-081",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-082",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-083",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-090",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-091",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-100",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-101",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-102",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-103",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-104",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-105",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-106",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-110",
+      "kind": "non-functional"
+    },
+    {
+      "id": "REQ-111",
+      "kind": "non-functional"
+    },
+    {
+      "id": "REQ-112",
+      "kind": "non-functional"
+    },
+    {
+      "id": "REQ-120",
+      "kind": "non-functional"
+    },
+    {
+      "id": "REQ-121",
+      "kind": "non-functional"
+    },
+    {
+      "id": "REQ-130",
+      "kind": "non-functional"
+    },
+    {
+      "id": "REQ-131",
+      "kind": "non-functional"
+    },
+    {
+      "id": "REQ-132",
+      "kind": "non-functional"
+    },
+    {
+      "id": "REQ-140",
+      "kind": "non-functional"
+    },
+    {
+      "id": "REQ-141",
+      "kind": "non-functional"
+    },
+    {
+      "id": "REQ-150",
+      "kind": "non-functional"
+    },
+    {
+      "id": "REQ-151",
+      "kind": "non-functional"
+    },
+    {
+      "id": "REQ-152",
+      "kind": "non-functional"
+    },
+    {
+      "id": "REQ-160",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-161",
+      "kind": "functional"
+    },
+    {
+      "id": "REQ-162",
+      "kind": "functional"
+    }
+  ]
+}
