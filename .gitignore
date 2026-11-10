@@ -1,0 +1,33 @@
+# Terraform state, plans and local overrides (the lock file is committed)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Secrets and credentials: never commit
+.env
+.env.*
+*.pem
+kubeconfig*
+*.kubeconfig
+
+# Python
+__pycache__/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+
+# OS and editors
+.DS_Store
+.idea/
+.vscode/

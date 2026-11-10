@@ -1,0 +1,18 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "OIDC_PROVIDER_ARN"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "ISSUER_HOST_AND_PATH:aud": "sts.amazonaws.com",
+          "ISSUER_HOST_AND_PATH:sub": "system:serviceaccount:spike:otel"
+        }
+      }
+    }
+  ]
+}

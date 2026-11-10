@@ -1,0 +1,45 @@
+# Phase 0, spike B: can a pod in AKS assume an AWS IAM role with its own
+# service-account token (no AWS keys)? Replace the two placeholders, then a
+# human applies this file. Pass = the pod's log shows the assumed-role ARN.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: spike
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: otel
+  namespace: spike
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: whoami
+  namespace: spike
+spec:
+  serviceAccountName: otel
+  restartPolicy: Never
+  containers:
+    - name: aws
+      image: amazon/aws-cli:latest
+      args: ["sts", "get-caller-identity"]
+      env:
+        - name: AWS_ROLE_ARN
+          value: arn:aws:iam::ACCOUNT_ID:role/aks-spike-otel
+        - name: AWS_WEB_IDENTITY_TOKEN_FILE
+          value: /var/run/secrets/aws/token
+        - name: AWS_REGION
+          value: us-east-1
+      volumeMounts:
+        - name: aws-token
+          mountPath: /var/run/secrets/aws
+          readOnly: true
+  volumes:
+    - name: aws-token
+      projected:
+        sources:
+          - serviceAccountToken:
+              audience: sts.amazonaws.com
+              expirationSeconds: 3600
+              path: token

@@ -1,0 +1,20 @@
+name: methodology-checks
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Guardrail hook tests
+        run: bash tools/claude-hooks/test-guard.sh
+      - name: PR description has AI involvement and requirement IDs
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python3 tools/ci/check_pr_body.py
