@@ -1,0 +1,457 @@
+{
+  "stage": "user-stories",
+  "upstream_ids": [
+    "REQ-001",
+    "REQ-002",
+    "REQ-003",
+    "REQ-004",
+    "REQ-005",
+    "REQ-006",
+    "REQ-007",
+    "REQ-008",
+    "REQ-009",
+    "REQ-010",
+    "REQ-011",
+    "REQ-012",
+    "REQ-013",
+    "REQ-014",
+    "REQ-015",
+    "REQ-020",
+    "REQ-021",
+    "REQ-022",
+    "REQ-023",
+    "REQ-024",
+    "REQ-025",
+    "REQ-026",
+    "REQ-030",
+    "REQ-031",
+    "REQ-032",
+    "REQ-033",
+    "REQ-034",
+    "REQ-035",
+    "REQ-040",
+    "REQ-041",
+    "REQ-050",
+    "REQ-051",
+    "REQ-052",
+    "REQ-053",
+    "REQ-054",
+    "REQ-055",
+    "REQ-060",
+    "REQ-061",
+    "REQ-062",
+    "REQ-063",
+    "REQ-064",
+    "REQ-065",
+    "REQ-070",
+    "REQ-071",
+    "REQ-072",
+    "REQ-073",
+    "REQ-080",
+    "REQ-081",
+    "REQ-082",
+    "REQ-083",
+    "REQ-090",
+    "REQ-091",
+    "REQ-100",
+    "REQ-101",
+    "REQ-102",
+    "REQ-103",
+    "REQ-104",
+    "REQ-105",
+    "REQ-106",
+    "REQ-110",
+    "REQ-111",
+    "REQ-112",
+    "REQ-120",
+    "REQ-121",
+    "REQ-130",
+    "REQ-131",
+    "REQ-132",
+    "REQ-140",
+    "REQ-141",
+    "REQ-150",
+    "REQ-151",
+    "REQ-152",
+    "REQ-160",
+    "REQ-161",
+    "REQ-162"
+  ],
+  "coverage": [
+    {
+      "id": "REQ-001",
+      "status": "OK",
+      "target": "US1.1"
+    },
+    {
+      "id": "REQ-002",
+      "status": "OK",
+      "target": "US1.1"
+    },
+    {
+      "id": "REQ-003",
+      "status": "OK",
+      "target": "US1.2"
+    },
+    {
+      "id": "REQ-004",
+      "status": "OK",
+      "target": "US1.1, US1.2"
+    },
+    {
+      "id": "REQ-005",
+      "status": "OK",
+      "target": "US1.1"
+    },
+    {
+      "id": "REQ-006",
+      "status": "OK",
+      "target": "US1.1, US1.2"
+    },
+    {
+      "id": "REQ-007",
+      "status": "OK",
+      "target": "US1.3"
+    },
+    {
+      "id": "REQ-008",
+      "status": "OK",
+      "target": "US1.3"
+    },
+    {
+      "id": "REQ-009",
+      "status": "OK",
+      "target": "US1.3"
+    },
+    {
+      "id": "REQ-010",
+      "status": "OK",
+      "target": "US1.5"
+    },
+    {
+      "id": "REQ-011",
+      "status": "OK",
+      "target": "US1.5"
+    },
+    {
+      "id": "REQ-012",
+      "status": "OK",
+      "target": "US1.4"
+    },
+    {
+      "id": "REQ-013",
+      "status": "OK",
+      "target": "US1.4"
+    },
+    {
+      "id": "REQ-014",
+      "status": "OK",
+      "target": "US1.4"
+    },
+    {
+      "id": "REQ-015",
+      "status": "OK",
+      "target": "US1.1"
+    },
+    {
+      "id": "REQ-020",
+      "status": "OK",
+      "target": "US2.1"
+    },
+    {
+      "id": "REQ-021",
+      "status": "OK",
+      "target": "US2.2"
+    },
+    {
+      "id": "REQ-022",
+      "status": "OK",
+      "target": "US2.2"
+    },
+    {
+      "id": "REQ-023",
+      "status": "OK",
+      "target": "US2.3"
+    },
+    {
+      "id": "REQ-024",
+      "status": "OK",
+      "target": "US2.3"
+    },
+    {
+      "id": "REQ-025",
+      "status": "OK",
+      "target": "US2.4, US2.7"
+    },
+    {
+      "id": "REQ-026",
+      "status": "OK",
+      "target": "US2.4"
+    },
+    {
+      "id": "REQ-030",
+      "status": "OK",
+      "target": "US2.6"
+    },
+    {
+      "id": "REQ-031",
+      "status": "OK",
+      "target": "US2.6"
+    },
+    {
+      "id": "REQ-032",
+      "status": "OK",
+      "target": "US2.6"
+    },
+    {
+      "id": "REQ-033",
+      "status": "OK",
+      "target": "US2.6"
+    },
+    {
+      "id": "REQ-034",
+      "status": "OK",
+      "target": "US3.1"
+    },
+    {
+      "id": "REQ-035",
+      "status": "OK",
+      "target": "US2.6"
+    },
+    {
+      "id": "REQ-040",
+      "status": "OK",
+      "target": "US3.2"
+    },
+    {
+      "id": "REQ-041",
+      "status": "OK",
+      "target": "US3.2"
+    },
+    {
+      "id": "REQ-050",
+      "status": "OK",
+      "target": "US3.1"
+    },
+    {
+      "id": "REQ-051",
+      "status": "OK",
+      "target": "US3.3"
+    },
+    {
+      "id": "REQ-052",
+      "status": "OK",
+      "target": "US3.4"
+    },
+    {
+      "id": "REQ-053",
+      "status": "OK",
+      "target": "US3.3"
+    },
+    {
+      "id": "REQ-054",
+      "status": "OK",
+      "target": "US3.5"
+    },
+    {
+      "id": "REQ-055",
+      "status": "OK",
+      "target": "US3.3"
+    },
+    {
+      "id": "REQ-060",
+      "status": "OK",
+      "target": "US4.1"
+    },
+    {
+      "id": "REQ-061",
+      "status": "OK",
+      "target": "US4.1"
+    },
+    {
+      "id": "REQ-062",
+      "status": "OK",
+      "target": "US4.1"
+    },
+    {
+      "id": "REQ-063",
+      "status": "OK",
+      "target": "US4.2"
+    },
+    {
+      "id": "REQ-064",
+      "status": "OK",
+      "target": "US4.3"
+    },
+    {
+      "id": "REQ-065",
+      "status": "OK",
+      "target": "US4.1"
+    },
+    {
+      "id": "REQ-070",
+      "status": "OK",
+      "target": "US4.4"
+    },
+    {
+      "id": "REQ-071",
+      "status": "OK",
+      "target": "US4.4"
+    },
+    {
+      "id": "REQ-072",
+      "status": "OK",
+      "target": "US4.4"
+    },
+    {
+      "id": "REQ-073",
+      "status": "OK",
+      "target": "US4.4"
+    },
+    {
+      "id": "REQ-080",
+      "status": "OK",
+      "target": "US4.5"
+    },
+    {
+      "id": "REQ-081",
+      "status": "OK",
+      "target": "US4.5"
+    },
+    {
+      "id": "REQ-082",
+      "status": "OK",
+      "target": "US4.6"
+    },
+    {
+      "id": "REQ-083",
+      "status": "OK",
+      "target": "US4.7"
+    },
+    {
+      "id": "REQ-090",
+      "status": "OK",
+      "target": "US3.6"
+    },
+    {
+      "id": "REQ-091",
+      "status": "OK",
+      "target": "US3.6"
+    },
+    {
+      "id": "REQ-100",
+      "status": "OK",
+      "target": "US4.8, US4.9"
+    },
+    {
+      "id": "REQ-101",
+      "status": "OK",
+      "target": "US3.8"
+    },
+    {
+      "id": "REQ-102",
+      "status": "OK",
+      "target": "US3.1, US4.1"
+    },
+    {
+      "id": "REQ-103",
+      "status": "OK",
+      "target": "US4.2"
+    },
+    {
+      "id": "REQ-104",
+      "status": "OK",
+      "target": "US3.7"
+    },
+    {
+      "id": "REQ-105",
+      "status": "OK",
+      "target": "US3.7"
+    },
+    {
+      "id": "REQ-106",
+      "status": "OK",
+      "target": "US3.7"
+    },
+    {
+      "id": "REQ-110",
+      "status": "OK",
+      "target": "US4.9"
+    },
+    {
+      "id": "REQ-111",
+      "status": "OK",
+      "target": "US3.9"
+    },
+    {
+      "id": "REQ-112",
+      "status": "OK",
+      "target": "US5.2"
+    },
+    {
+      "id": "REQ-120",
+      "status": "OK",
+      "target": "US4.9"
+    },
+    {
+      "id": "REQ-121",
+      "status": "OK",
+      "target": "US2.6, US3.1, US4.5"
+    },
+    {
+      "id": "REQ-130",
+      "status": "OK",
+      "target": "US2.5"
+    },
+    {
+      "id": "REQ-131",
+      "status": "OK",
+      "target": "US2.4"
+    },
+    {
+      "id": "REQ-132",
+      "status": "OK",
+      "target": "US3.8"
+    },
+    {
+      "id": "REQ-140",
+      "status": "OK",
+      "target": "US2.6"
+    },
+    {
+      "id": "REQ-141",
+      "status": "OK",
+      "target": "US2.6"
+    },
+    {
+      "id": "REQ-150",
+      "status": "OK",
+      "target": "US5.2"
+    },
+    {
+      "id": "REQ-151",
+      "status": "OK",
+      "target": "US5.1"
+    },
+    {
+      "id": "REQ-152",
+      "status": "OK",
+      "target": "US2.1, US5.2"
+    },
+    {
+      "id": "REQ-160",
+      "status": "OK",
+      "target": "US2.7"
+    },
+    {
+      "id": "REQ-161",
+      "status": "OK",
+      "target": "US3.9"
+    },
+    {
+      "id": "REQ-162",
+      "status": "OK",
+      "target": "US4.9"
+    }
+  ]
+}

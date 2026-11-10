@@ -1,0 +1,199 @@
+{
+  "stage": "domain-design",
+  "upstream_ids": [
+    "US1.1",
+    "US1.5",
+    "US2.1",
+    "US2.7",
+    "US2.3",
+    "US2.6",
+    "US3.1",
+    "US3.9",
+    "US4.1",
+    "US4.9",
+    "US5.1",
+    "US5.2",
+    "US1.2",
+    "US1.3",
+    "US1.4",
+    "US2.2",
+    "US2.4",
+    "US2.5",
+    "US3.2",
+    "US3.3",
+    "US3.4",
+    "US3.5",
+    "US3.6",
+    "US3.7",
+    "US3.8",
+    "US4.2",
+    "US4.3",
+    "US4.4",
+    "US4.5",
+    "US4.6",
+    "US4.7",
+    "US4.8"
+  ],
+  "coverage": [
+    {
+      "id": "US1.1",
+      "status": "OK",
+      "target": "CodingAgentGuard, GuardrailCiGate"
+    },
+    {
+      "id": "US1.5",
+      "status": "OK",
+      "target": "CodingAgentGuard"
+    },
+    {
+      "id": "US2.1",
+      "status": "OK",
+      "target": "LabInfrastructure"
+    },
+    {
+      "id": "US2.7",
+      "status": "OK",
+      "target": "LabInfrastructure, EventIntake, IncidentLedger"
+    },
+    {
+      "id": "US2.3",
+      "status": "OK",
+      "target": "PlatformBundles"
+    },
+    {
+      "id": "US2.6",
+      "status": "OK",
+      "target": "EventIntake, IncidentLedger, Notifier"
+    },
+    {
+      "id": "US3.1",
+      "status": "OK",
+      "target": "EventIntake, AgentSession, InvestigatorAgent, ToolGovernance"
+    },
+    {
+      "id": "US3.9",
+      "status": "OK",
+      "target": "AgentSession, ToolGovernance"
+    },
+    {
+      "id": "US4.1",
+      "status": "OK",
+      "target": "RemediatorAgent, ToolGovernance, GuardrailCiGate"
+    },
+    {
+      "id": "US4.9",
+      "status": "OK",
+      "target": "AgentSession, ToolGovernance, IncidentLedger"
+    },
+    {
+      "id": "US5.1",
+      "status": "OK",
+      "target": "GuardrailCiGate"
+    },
+    {
+      "id": "US5.2",
+      "status": "OK",
+      "target": "GuardrailCiGate, LabInfrastructure"
+    },
+    {
+      "id": "US1.2",
+      "status": "OK",
+      "target": "CodingAgentGuard"
+    },
+    {
+      "id": "US1.3",
+      "status": "OK",
+      "target": "GuardrailCiGate"
+    },
+    {
+      "id": "US1.4",
+      "status": "OK",
+      "target": "CodingAgentGuard, GuardrailCiGate"
+    },
+    {
+      "id": "US2.2",
+      "status": "OK",
+      "target": "LabInfrastructure, PlatformBundles"
+    },
+    {
+      "id": "US2.4",
+      "status": "OK",
+      "target": "LabInfrastructure"
+    },
+    {
+      "id": "US2.5",
+      "status": "OK",
+      "target": "LabInfrastructure"
+    },
+    {
+      "id": "US3.2",
+      "status": "OK",
+      "target": "TriageAgent, AgentSession"
+    },
+    {
+      "id": "US3.3",
+      "status": "OK",
+      "target": "InvestigatorAgent, IncidentLedger"
+    },
+    {
+      "id": "US3.4",
+      "status": "OK",
+      "target": "InvestigatorAgent, Notifier"
+    },
+    {
+      "id": "US3.5",
+      "status": "OK",
+      "target": "InvestigatorAgent"
+    },
+    {
+      "id": "US3.6",
+      "status": "OK",
+      "target": "Notifier, OutputSanitizer"
+    },
+    {
+      "id": "US3.7",
+      "status": "OK",
+      "target": "AgentSession, ReplayRecorder, OutputSanitizer"
+    },
+    {
+      "id": "US3.8",
+      "status": "OK",
+      "target": "AgentSession, IncidentLedger"
+    },
+    {
+      "id": "US4.2",
+      "status": "OK",
+      "target": "OutputSanitizer, ToolGovernance"
+    },
+    {
+      "id": "US4.3",
+      "status": "OK",
+      "target": "IncidentLedger"
+    },
+    {
+      "id": "US4.4",
+      "status": "OK",
+      "target": "ReviewerAgent, AgentSession, ToolGovernance"
+    },
+    {
+      "id": "US4.5",
+      "status": "OK",
+      "target": "EventIntake, VerifierAgent"
+    },
+    {
+      "id": "US4.6",
+      "status": "OK",
+      "target": "VerifierAgent"
+    },
+    {
+      "id": "US4.7",
+      "status": "OK",
+      "target": "EventIntake, IncidentLedger"
+    },
+    {
+      "id": "US4.8",
+      "status": "OK",
+      "target": "ToolGovernance, AgentSession"
+    }
+  ]
+}
