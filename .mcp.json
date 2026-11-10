@@ -10,7 +10,7 @@
     "aws-mcp": {
       "command": "uvx",
       "args": [
-        "mcp-proxy-for-aws@latest",
+        "mcp-proxy-for-aws@1.8.0",
         "https://aws-mcp.us-east-1.api.aws/mcp",
         "--metadata",
         "AWS_REGION=us-east-1"
@@ -19,19 +19,19 @@
     "aws-pricing": {
       "command": "uvx",
       "args": [
-        "awslabs.aws-pricing-mcp-server@latest"
+        "awslabs.aws-pricing-mcp-server@1.1.1"
       ]
     },
     "aws-iac": {
       "command": "uvx",
       "args": [
-        "awslabs.aws-iac-mcp-server@latest"
+        "awslabs.aws-iac-mcp-server@1.0.26"
       ]
     },
     "aws-serverless": {
       "command": "uvx",
       "args": [
-        "awslabs.aws-serverless-mcp-server@latest"
+        "awslabs.aws-serverless-mcp-server@0.2.1"
       ]
     }
   }
