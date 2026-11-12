@@ -9,3 +9,11 @@
 
 REQ-150.1
 REQ-151.1
+
+# PR 1 (feat/REQ-020-lab-vpc-eks-rancher): tests/u1/tools_lab/. The Terraform in
+# infra/aws/ (REQ-020, REQ-020.1, REQ-013.1, REQ-131.1) is checked by its own
+# terraform test files, which this pytest-only list does not read.
+REQ-021.1
+REQ-022
+REQ-050.1
+REQ-103.1

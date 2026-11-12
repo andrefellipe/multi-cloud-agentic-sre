@@ -1,0 +1,143 @@
+#!/bin/bash
+# First boot of the Rancher host (LC17). Terraform renders this file from
+# infra/aws/lab/templates/rancher-host-user-data.sh.tftpl, and cloud-init runs
+# it once, as root. It:
+#   1. downloads K3s, the K3s install script and the Rancher chart at pinned
+#      versions, and stops unless each matches its pinned SHA-256 (REQ-112.1);
+#   2. installs K3s, whose bundled Helm controller installs Rancher from the
+#      verified chart, so no Helm client is downloaded;
+#   3. waits for the admin password that Rancher generates at first start, and
+#      writes it to Secrets Manager (REQ-021.1). The password is never printed
+#      and never written to a file.
+# Output goes to the journal: journalctl -t rancher-bootstrap, through Session
+# Manager. Never add `set -x`: it would print the password.
+set -euo pipefail
+umask 077
+exec > >(logger --tag rancher-bootstrap) 2>&1
+
+readonly K3S_VERSION='${k3s_version}'
+readonly K3S_VERSION_URL='${k3s_version_url}'
+readonly RANCHER_CHART_VERSION='${rancher_chart_version}'
+readonly ADMIN_SECRET='${admin_secret_name}'
+readonly AWS_REGION='${region}'
+readonly BOOTSTRAP_DIR=/usr/local/lib/rancher-bootstrap
+readonly MANIFESTS=/var/lib/rancher/k3s/server/manifests
+readonly CHARTS=/var/lib/rancher/k3s/server/static/charts
+
+# download URL DESTINATION SHA256: fetch over HTTPS, keep the file only if its
+# SHA-256 matches, and stop the boot script otherwise.
+download() {
+  local url="$1" destination="$2" expected="$3"
+  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+    --retry 5 --retry-delay 5 --retry-all-errors --output "$destination.part" "$url"
+  if ! printf '%s  %s\n' "$expected" "$destination.part" | sha256sum --check --status; then
+    rm -f "$destination.part"
+    echo "SHA-256 mismatch for $url; stopping." >&2
+    exit 1
+  fi
+  mv "$destination.part" "$destination"
+}
+
+# wait_until SECONDS DESCRIPTION COMMAND...: run COMMAND every 10 s until it succeeds.
+wait_until() {
+  local deadline=$((SECONDS + $1)) description="$2"
+  shift 2
+  until "$@" >/dev/null 2>&1; do
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      echo "Timed out waiting for $description; stopping." >&2
+      exit 1
+    fi
+    sleep 10
+  done
+}
+
+echo "Installing K3s $K3S_VERSION and the Rancher chart $RANCHER_CHART_VERSION."
+install -d -m 0755 /etc/rancher/k3s "$MANIFESTS" "$CHARTS" "$BOOTSTRAP_DIR"
+
+cat > /etc/rancher/k3s/config.yaml <<'EOF'
+write-kubeconfig-mode: "0600"
+secrets-encryption: true
+EOF
+
+download "https://github.com/k3s-io/k3s/releases/download/$K3S_VERSION_URL/k3s" \
+  /usr/local/bin/k3s '${k3s_sha256}'
+chmod 0755 /usr/local/bin/k3s
+download "https://raw.githubusercontent.com/k3s-io/k3s/$K3S_VERSION_URL/install.sh" \
+  "$BOOTSTRAP_DIR/k3s-install.sh" '${k3s_install_sha256}'
+download "https://releases.rancher.com/server-charts/stable/rancher-$RANCHER_CHART_VERSION.tgz" \
+  "$CHARTS/rancher-$RANCHER_CHART_VERSION.tgz" '${rancher_chart_sha256}'
+chmod 0644 "$CHARTS/rancher-$RANCHER_CHART_VERSION.tgz"
+printf '%s' '${put_secret_value_b64}' | base64 --decode > "$BOOTSTRAP_DIR/put_secret_value.py"
+
+# Rancher, installed by K3s's Helm controller from the verified chart. TLS ends
+# at the two load balancers, which hold the ACM certificate and re-encrypt to
+# Traefik on 443. So Rancher runs with external TLS and publishes no CA of its
+# own (--no-cacerts), and its cluster agents trust the public certificate
+# through the system store.
+cat > "$MANIFESTS/rancher.yaml" <<'EOF'
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cattle-system
+---
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: rancher
+  namespace: kube-system
+spec:
+  chart: https://%%{KUBERNETES_API}%/static/charts/rancher-${rancher_chart_version}.tgz
+  targetNamespace: cattle-system
+  valuesContent: |-
+    hostname: ${rancher_hostname}
+    replicas: 1
+    tls: external
+    agentTLSMode: system-store
+---
+# The load balancers' health check sends the target's IP address as the host
+# name, which the Rancher ingress, bound to its own host name, never matches.
+# This route answers Rancher's /healthz for any host name, and nothing else.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rancher-lb-healthz
+  namespace: cattle-system
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /healthz
+            pathType: Exact
+            backend:
+              service:
+                name: rancher
+                port:
+                  number: 80
+EOF
+
+INSTALL_K3S_SKIP_DOWNLOAD=true INSTALL_K3S_VERSION="$K3S_VERSION" \
+  sh "$BOOTSTRAP_DIR/k3s-install.sh" server
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+wait_until 600 "the Kubernetes API" k3s kubectl get --raw /readyz
+
+# Rancher generates its admin password at first start and keeps it in the
+# bootstrap-secret Secret (Rancher 2.15.3, pkg/data/management/bootstrap_password.go).
+read_password() {
+  k3s kubectl --namespace cattle-system get secret bootstrap-secret \
+    --output 'jsonpath={.data.bootstrapPassword}'
+}
+
+echo "Waiting for Rancher to create its admin password."
+password_b64=""
+deadline=$((SECONDS + 1800))
+until password_b64="$(read_password 2>/dev/null)" && [ -n "$password_b64" ]; do
+  if [ "$SECONDS" -ge "$deadline" ]; then
+    echo "Rancher did not create its admin password within 30 minutes; stopping." >&2
+    exit 1
+  fi
+  sleep 15
+done
+printf '%s' "$password_b64" | base64 --decode \
+  | python3 "$BOOTSTRAP_DIR/put_secret_value.py" --secret-id "$ADMIN_SECRET" --region "$AWS_REGION"
+unset password_b64
+echo "Done: the Rancher admin password is in Secrets Manager as $ADMIN_SECRET."
