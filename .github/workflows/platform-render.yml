@@ -1,0 +1,129 @@
+# Fleet bundle and pinning checks (REQ-112.1, REQ-150.1).
+#
+# Runs on every pull request, so its check always reports and can be required.
+# It runs PR code with no cloud or cluster access. In order:
+#   1. ShellCheck on u1's shell scripts, and the pin check's own tests.
+#   2. The pin check over the MCP configuration, platform/ and the workflows.
+#   3. kustomize build of the cloud=aws overlay, and helm template of each Fleet
+#      chart bundle with its values. Each skips while there is nothing to render.
+# ShellCheck, kustomize, helm and yq come from the ubuntu-24.04 runner image.
+name: platform-render
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: platform-render-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  platform-render:
+    name: platform-render
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - name: ShellCheck u1's shell scripts (REQ-150.1)
+        run: |
+          mapfile -t scripts < <(git ls-files -- 'tools/ci/*.sh' 'tools/lab/*.sh' 'tools/build/*.sh' 'tools/skeleton/*.sh')
+          if [ "${#scripts[@]}" -eq 0 ]; then
+            echo "::notice::No shell scripts to check."
+            exit 0
+          fi
+          shellcheck --version
+          shellcheck "${scripts[@]}"
+
+      - name: Test the pin check (REQ-112.1)
+        run: bash tools/ci/test-check-pins.sh
+
+      - name: Pin check (REQ-112.1)
+        run: |
+          paths=()
+          for path in .mcp.json platform .github/workflows/*.yml .github/workflows/*.yaml; do
+            case "$path" in
+              # The Phase 0 workflow is left out until u2 pins it: it still uses a
+              # tag for actions/checkout and the moving ubuntu runner label.
+              .github/workflows/methodology-checks.yml) continue ;;
+            esac
+            if [ -e "$path" ]; then
+              paths+=("$path")
+            fi
+          done
+          bash tools/ci/check_pins.sh "${paths[@]}"
+
+      - name: Build the cloud=aws overlay
+        run: |
+          overlay=platform/overlays/aws
+          if [ ! -e "$overlay/kustomization.yaml" ] && [ ! -e "$overlay/kustomization.yml" ] \
+            && [ ! -e "$overlay/Kustomization" ]; then
+            echo "::notice::No $overlay yet, so there is nothing to build."
+            exit 0
+          fi
+          kustomize version
+          kustomize build --enable-helm "$overlay" > "$RUNNER_TEMP/overlay-aws.yaml"
+          echo "$overlay renders $(grep -c '^kind:' "$RUNNER_TEMP/overlay-aws.yaml") resources."
+
+      - name: Render each Fleet chart bundle with its values
+        run: |
+          mapfile -t bundles < <(find platform \( -name fleet.yaml -o -name fleet.yml \) | LC_ALL=C sort)
+          if [ "${#bundles[@]}" -eq 0 ]; then
+            echo "::notice::No Fleet bundles under platform/ yet, so there is nothing to render."
+            exit 0
+          fi
+          yq --version
+          helm version --short
+          status=0
+          for bundle in "${bundles[@]}"; do
+            dir="$(dirname "$bundle")"
+            chart="$(yq '.helm.chart // ""' "$bundle")"
+            if [ -z "$chart" ]; then
+              continue # no Helm chart: the overlay build covers plain manifests
+            fi
+            repo="$(yq '.helm.repo // ""' "$bundle")"
+            version="$(yq '.helm.version // ""' "$bundle")"
+            release="$(yq '.helm.releaseName // ""' "$bundle")"
+            args=()
+            if [ -n "$repo" ] || [[ "$chart" == oci://* ]]; then
+              chart_ref="$chart"
+              if [ -n "$repo" ]; then
+                args+=(--repo "$repo")
+              fi
+              if [ -z "$version" ]; then
+                echo "::error file=$bundle::helm.version is empty; a remote chart is pinned by version (REQ-112.1)."
+                status=1
+                continue
+              fi
+              args+=(--version "$version")
+            else
+              chart_ref="$dir/$chart"
+            fi
+            # The bundle's values, then those of its target that matches cloud=aws.
+            mapfile -t values < <(
+              yq '(.helm.valuesFiles // [])[]' "$bundle"
+              yq '(.targetCustomizations // [])[] | select(.clusterSelector.matchLabels.cloud == "aws") | (.helm.valuesFiles // [])[]' "$bundle"
+            )
+            for file in "${values[@]}"; do
+              args+=(--values "$dir/$file")
+            done
+            echo "::group::helm template $bundle"
+            if helm template "${release:-$(basename "$dir")}" "$chart_ref" "${args[@]}" > "$RUNNER_TEMP/render.yaml"; then
+              echo "$bundle renders $(grep -c '^kind:' "$RUNNER_TEMP/render.yaml") resources."
+            else
+              echo "::error file=$bundle::helm template failed."
+              status=1
+            fi
+            echo "::endgroup::"
+          done
+          exit "$status"

@@ -1,0 +1,237 @@
+# Terraform checks for infra/aws (REQ-150.1, REQ-152.1, REQ-112.1).
+#
+# Runs on every pull request, so both checks always report and can be required.
+# The jobs work only when the pull request changes infra/aws or this workflow,
+# and only on the roots that exist; otherwise they skip their steps and pass.
+#
+# terraform-fmt-validate runs PR code with no cloud access: fmt -check, then
+# validate after an init with no backend, from the committed lock file.
+#
+# terraform-plan is the one job where PR code meets a cloud credential. It runs
+# only for pull requests from this repository, assumes the read-only plan role
+# through GitHub OIDC (no key is stored in GitHub, REQ-152.1), plans only the
+# permanent and lab roots, and posts the plans as a PR comment. bootstrap and
+# dashboards are formatted and validated only.
+#
+# The plan role's ARN comes from the repository secret AWS_PLAN_ROLE_ARN. It is
+# not a credential: it is a secret only so that GitHub masks the account ID the
+# ARN carries, which must not reach the logs. Until it is set, nothing is planned
+# and the job says so.
+name: terraform
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: terraform-${{ github.event.pull_request.number }}
+  # Never cancel a run: a plan stopped midway can leave the state lock held.
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+jobs:
+  fmt-validate:
+    name: terraform-fmt-validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out the merge commit and its base
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+
+      - name: Find the roots to check
+        id: roots
+        run: |
+          # HEAD is the pull request merged into its base, and HEAD^1 is that base.
+          if [ -z "$(git diff --name-only HEAD^1 HEAD -- infra/aws .github/workflows/terraform.yml)" ]; then
+            echo "::notice::This pull request does not change infra/aws, so Terraform is not checked."
+            echo "roots=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          roots=""
+          for root in bootstrap permanent lab dashboards; do
+            if [ -d "infra/aws/$root" ]; then
+              roots="$roots $root"
+            fi
+          done
+          if [ -z "$roots" ]; then
+            echo "::notice::No Terraform root exists under infra/aws yet."
+          fi
+          echo "roots=${roots# }" >> "$GITHUB_OUTPUT"
+
+      - name: Install Terraform
+        if: steps.roots.outputs.roots != ''
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.17.1"
+          terraform_wrapper: false
+
+      - name: terraform fmt -check and validate, per root
+        if: steps.roots.outputs.roots != ''
+        env:
+          ROOTS: ${{ steps.roots.outputs.roots }}
+        run: |
+          status=0
+          for root in $ROOTS; do
+            dir="infra/aws/$root"
+            echo "::group::$dir"
+            if ! terraform -chdir="$dir" fmt -check -recursive -diff; then
+              echo "::error::terraform fmt -check failed in $dir"
+              status=1
+            fi
+            # No backend and no credentials. -lockfile=readonly fails when the
+            # committed .terraform.lock.hcl is missing or out of date (REQ-112.1).
+            if terraform -chdir="$dir" init -backend=false -lockfile=readonly -input=false \
+              && terraform -chdir="$dir" validate -no-color; then
+              echo "$dir is valid."
+            else
+              echo "::error::terraform init or validate failed in $dir"
+              status=1
+            fi
+            echo "::endgroup::"
+          done
+          exit "$status"
+
+  plan:
+    name: terraform-plan
+    needs: fmt-validate
+    # Forks never get the role (GitHub gives them no OIDC token or secrets either).
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write # GitHub OIDC for the read-only plan role (REQ-152.1)
+      pull-requests: write # the plan comment
+    defaults:
+      run:
+        shell: bash
+    env:
+      PLAN_ROLE_ARN: ${{ secrets.AWS_PLAN_ROLE_ARN }}
+    steps:
+      - name: Check out the merge commit and its base
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+
+      - name: Find the roots to plan
+        id: roots
+        run: |
+          if [ -z "$(git diff --name-only HEAD^1 HEAD -- infra/aws .github/workflows/terraform.yml)" ]; then
+            echo "::notice::This pull request does not change infra/aws, so nothing is planned."
+            echo "roots=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          roots=""
+          for root in permanent lab; do
+            if [ -d "infra/aws/$root" ]; then
+              roots="$roots $root"
+            fi
+          done
+          if [ -z "$roots" ]; then
+            echo "::notice::Neither infra/aws/permanent nor infra/aws/lab exists yet, so nothing is planned."
+          elif [ -z "$PLAN_ROLE_ARN" ]; then
+            echo "::warning::The AWS_PLAN_ROLE_ARN secret is not set, so nothing is planned. Set it once the plan role exists."
+            roots=""
+          fi
+          echo "roots=${roots# }" >> "$GITHUB_OUTPUT"
+
+      - name: Install Terraform
+        if: steps.roots.outputs.roots != ''
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.17.1"
+          terraform_wrapper: false
+
+      - name: Assume the read-only plan role through GitHub OIDC
+        id: aws
+        if: steps.roots.outputs.roots != ''
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ env.PLAN_ROLE_ARN }}
+          role-session-name: terraform-plan-${{ github.run_id }}
+          role-duration-seconds: 1800
+          aws-region: us-east-1
+          mask-aws-account-id: true
+
+      - name: terraform plan, per root
+        id: plan
+        if: steps.roots.outputs.roots != ''
+        env:
+          ROOTS: ${{ steps.roots.outputs.roots }}
+        run: |
+          failed=false
+          for root in $ROOTS; do
+            dir="infra/aws/$root"
+            out="$RUNNER_TEMP/plan-$root.txt"
+            echo "::group::$dir"
+            # The state lock is the role's only write; -lock-timeout waits for an apply you may be running.
+            if ! { terraform -chdir="$dir" init -input=false -lockfile=readonly -no-color \
+              && terraform -chdir="$dir" plan -input=false -lock-timeout=5m -no-color; } > "$out" 2>&1; then
+              failed=true
+            fi
+            cat "$out"
+            echo "::endgroup::"
+          done
+          echo "failed=$failed" >> "$GITHUB_OUTPUT"
+
+      - name: Post the plans as a pull request comment
+        if: ${{ steps.roots.outputs.roots != '' && !cancelled() }}
+        env:
+          ROOTS: ${{ steps.roots.outputs.roots }}
+          ACCOUNT_ID: ${{ steps.aws.outputs.aws-account-id }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          body="$RUNNER_TEMP/plan-comment.md"
+          {
+            echo "### Terraform plan"
+            echo
+            echo "Planned with the read-only plan role; nothing was applied. [Run log]($RUN_URL)."
+            for root in $ROOTS; do
+              out="$RUNNER_TEMP/plan-$root.txt"
+              if [ ! -f "$out" ]; then
+                continue
+              fi
+              summary="$(grep -m 1 -o -E '(Plan: [0-9].*|No changes\..*|Error: .*)' "$out" || true)"
+              summary="$(printf '%s' "$summary" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')"
+              echo
+              echo "<details><summary><code>infra/aws/$root</code>: ${summary:-see the run log}</summary>"
+              echo
+              echo '````text'
+              head -c 30000 "$out"
+              if [ "$(wc -c < "$out")" -gt 30000 ]; then
+                echo
+                echo "[cut at 30,000 characters; the whole plan is in the run log]"
+              fi
+              echo '````'
+              echo
+              echo "</details>"
+            done
+          } > "$body"
+          # A plan can name the account ID inside ARNs. The log masks it, and the comment must not show it.
+          if [ -n "$ACCOUNT_ID" ]; then
+            sed -i "s/$ACCOUNT_ID/<account-id>/g" "$body"
+          fi
+          gh pr comment "$PR_NUMBER" --body-file "$body"
+
+      - name: Fail when a plan failed
+        if: steps.plan.outputs.failed == 'true'
+        run: |
+          echo "::error::terraform plan failed for at least one root; see the plan step and the PR comment."
+          exit 1

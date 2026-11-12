@@ -1,0 +1,88 @@
+# Python project for the SRE agent system. Managed with uv; uv.lock pins every
+# package with hashes (REQ-112.1). Quality bars: REQ-150.1 (Ruff, mypy strict,
+# 80% line coverage) and REQ-151.1 (tests cite the REQ IDs they verify).
+
+[project]
+name = "multi-cloud-agentic-sre"
+version = "0.1.0"
+description = "Open SRE agent system on AWS: alert intake, incident ledger and read-only agent sessions."
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.14.3",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.1",
+    "pytest>=9.2.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.17.4",
+]
+
+[tool.uv]
+# Not built as a wheel: Lambda and runtime packages are assembled by tools/build/.
+package = false
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.format]
+# tools/ci/check_pr_body.py predates u1 and belongs to u2 (GuardrailCiGate). It
+# passes the lint rules but misses one blank line the formatter wants; u1 does
+# not change it.
+exclude = ["tools/ci/check_pr_body.py"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # import order
+    "N",   # naming
+    "UP",  # newer Python syntax
+    "B",   # bugbear
+    "S",   # bandit security checks
+    "C4",  # comprehensions
+    "SIM", # simplifications
+    "PT",  # pytest style
+    "RUF", # Ruff-specific checks
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests assert by design.
+"tests/**" = ["S101"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+plugins = ["pydantic.mypy"]
+# tools/ci/check_pr_body.py predates u1 and belongs to u2 (GuardrailCiGate),
+# which brings it under these checks. u1 does not change it.
+exclude = ['^tools/ci/check_pr_body\.py$']
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = ["-ra", "--strict-markers", "--strict-config", "--import-mode=importlib"]
+xfail_strict = true
+
+[tool.coverage.run]
+source = ["agents", "tools"]
+# Same reason as the mypy exclude above: u2 owns this script and its tests.
+omit = ["tools/ci/check_pr_body.py"]
+
+[tool.coverage.report]
+# The project floor (REQ-150.1). Never lower it to make a build pass.
+fail_under = 80
+show_missing = true
+# Report every Python file under the source folders, including script folders
+# without __init__.py, so an untested script counts against the floor.
+include_namespace_packages = true

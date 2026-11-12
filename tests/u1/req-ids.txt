@@ -1,0 +1,11 @@
+# REQ IDs that u1's tests must cite (REQ-151.1). The python-quality workflow runs
+# tools/ci/check_req_citations.py against this list and tests/u1, and fails when
+# a listed ID is cited by no test.
+#
+# Each u1 PR adds the IDs its tests verify, so by the last PR the list holds every
+# u1 requirement that a test verifies. Verified outside pytest, so not listed:
+#   REQ-112.1  by tools/ci/test-check-pins.sh and the pin check in platform-render
+#   REQ-152.1  by review of the workflows and the plan role's trust policy
+
+REQ-150.1
+REQ-151.1
