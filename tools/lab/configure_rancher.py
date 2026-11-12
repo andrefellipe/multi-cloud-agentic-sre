@@ -409,14 +409,16 @@ def login(
 
 
 def end_session(api: RancherAPI, token: str, console: Console) -> None:
-    """Delete a session token once it is no longer needed."""
-    name = token.split(":", 1)[0]
+    """Log the session out once it is no longer needed.
+
+    Rancher refuses to delete the token of the session that makes the request
+    ("Use logout instead"), so the session logs itself out.
+    """
     try:
-        api.delete(f"/v3/tokens/{name}")
+        api.post("/v3/tokens", {}, {"action": "logout"})
     except RancherError as error:
-        console.say(
-            f"Note: could not delete the session token {name}; it expires on its own. {error}"
-        )
+        name = token.split(":", 1)[0]
+        console.say(f"Note: could not log out the session {name}; it expires on its own. {error}")
 
 
 def keep_admin_password(api: RancherAPI, password: str, console: Console) -> None:
@@ -650,28 +652,42 @@ def registration_command(api: RancherAPI, cluster_id: str, settings: Settings, c
         clock.sleep(settings.poll_seconds)
 
 
+def _cluster_ready(cluster: JSON) -> bool:
+    """Return True when Rancher reports the cluster's Ready condition as True.
+
+    A cluster record reads "active" for a moment after it is created, before
+    Rancher adds any conditions, so its state alone does not show that the
+    cluster agent has connected.
+    """
+    conditions = cluster.get("conditions")
+    return isinstance(conditions, list) and any(
+        isinstance(c, dict) and c.get("type") == "Ready" and c.get("status") == "True"
+        for c in conditions
+    )
+
+
 def ensure_cluster_active(
     api: RancherAPI, cluster_id: str, settings: Settings, clock: Clock, console: Console
 ) -> None:
-    """Print the registration command if the cluster is not active, and wait until it is."""
-    if api.get(f"/v3/clusters/{cluster_id}").get("state") == "active":
+    """Print the registration command until Rancher reports the cluster Ready, and wait."""
+    if _cluster_ready(api.get(f"/v3/clusters/{cluster_id}")):
         return
     command = registration_command(api, cluster_id, settings, clock)
     console.say(
         "Register the EKS cluster: in a terminal with your admin profile, run\n"
         f"    aws eks update-kubeconfig --region {settings.region} --name {settings.cluster_name}\n"
         f"    {command}\n"
-        "Waiting for the cluster to turn active..."
+        "Waiting for Rancher to report the cluster Ready..."
     )
     deadline = clock.monotonic() + settings.wait_seconds
-    while api.get(f"/v3/clusters/{cluster_id}").get("state") != "active":
+    while not _cluster_ready(api.get(f"/v3/clusters/{cluster_id}")):
         if clock.monotonic() >= deadline:
             raise ConfigureError(
-                f"the cluster {settings.cluster_name} did not turn active. Check that the "
+                f"the cluster {settings.cluster_name} did not turn Ready. Check that the "
                 "registration command ran, and the cattle-system pods on EKS"
             )
         clock.sleep(settings.poll_seconds)
-    console.say(f"Cluster {settings.cluster_name}: active.")
+    console.say(f"Cluster {settings.cluster_name}: ready.")
 
 
 def ensure_gitrepo(api: RancherAPI, settings: Settings, console: Console) -> None:
@@ -724,10 +740,14 @@ def rotate_agent_token(
         token = console.secret(_text(created, "token"))
         new_name = token.split(":", 1)[0]
         write_secret(aws.secrets, settings.agent_credential_name, token)
-        expires = created.get("expiresAt", "")
+        # Rancher sets expiresAt on a token's first use, so read the stored token
+        # back with itself: that shows its expiry and proves it signs in.
+        with RancherAPI(rancher_url, token, console, transport) as stored:
+            expires = stored.get(f"/v3/tokens/{new_name}").get("expiresAt")
         console.say(
-            f"Token: a new {settings.agent_username} token, expiring {expires}, "
-            f"is in {settings.agent_credential_name}."
+            f"Token: a new {settings.agent_username} token, which signs in and expires "
+            f"{expires or f'in {settings.token_ttl_days} days'}, is in "
+            f"{settings.agent_credential_name}."
         )
         for old in _items(agent.get("/v3/tokens")):
             name = old.get("name")

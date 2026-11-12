@@ -152,17 +152,23 @@ def _collection(items: list[JSON]) -> httpx.Response:
 class FakeRancher:
     """An in-memory Rancher API for configure_rancher.py.
 
-    Switches: ``ready`` (answers /ping), ``reject_logins``,
+    Switches: ``ready`` (answers /ping), ``reject_logins``, ``refuse_logout``,
     ``refuse_global_role_bindings`` (the /v1 API refuses new bindings), and
     ``polls_until_active``: how many cluster reads after the registration command
-    was handed out before the cluster turns active, or None for never.
+    was handed out before Rancher reports the cluster Ready, or None for never.
+
+    As in Rancher 2.15, a new cluster record reads "active" before it has any
+    conditions, a session cannot delete its own token (it logs out instead), and a
+    token's ``expiresAt`` is set on its first use, as ``expires_on_first_use``.
     """
 
     admin_password: str
     ready: bool = True
     reject_logins: bool = False
+    refuse_logout: bool = False
     refuse_global_role_bindings: bool = False
     polls_until_active: int | None = 1
+    expires_on_first_use: str = "2026-12-12T00:00:00Z"
     passwords: dict[str, str] = field(default_factory=dict)
     users: dict[str, JSON] = field(default_factory=dict)
     tokens: dict[str, JSON] = field(default_factory=dict)
@@ -178,6 +184,7 @@ class FakeRancher:
     issued_bearers: list[str] = field(default_factory=list)
     commands_handed_out: int = 0
     _next: int = 0
+    _current_token: str | None = None
 
     def __post_init__(self) -> None:
         self.passwords["admin"] = self.admin_password
@@ -234,7 +241,12 @@ class FakeRancher:
         bearer = request.headers.get("authorization", "").removeprefix("Bearer ")
         name, _, key = bearer.partition(":")
         token = self.tokens.get(name)
-        return token["userId"] if token and token["key"] == key else None
+        if not token or token["key"] != key:
+            return None
+        self._current_token = name
+        if not token["expiresAt"]:
+            token["expiresAt"] = self.expires_on_first_use
+        return str(token["userId"])
 
     def _issue(self, user_id: str, kind: str, description: str, ttl: int = 0) -> JSON:
         name = self.new_id("token")
@@ -247,11 +259,12 @@ class FakeRancher:
             "kind": kind,
             "description": description,
             "ttl": ttl,
+            "expiresAt": "",
             "key": key,
         }
         bearer = f"{name}:{key}"
         self.issued_bearers.append(bearer)
-        return {"id": name, "name": name, "type": "token", "token": bearer, "expiresAt": "later"}
+        return {"id": name, "name": name, "type": "token", "token": bearer, "expiresAt": ""}
 
     def _login(self, body: JSON) -> httpx.Response:
         username = body.get("username", "")
@@ -265,7 +278,7 @@ class FakeRancher:
     ) -> httpx.Response:
         parts = path.strip("/").split("/")
         if parts[:2] == ["v3", "tokens"]:
-            return self._tokens(method, parts, body, caller)
+            return self._tokens(method, parts, params, body, caller)
         if caller != "user-admin":
             return _error(403, "Forbidden")
         if parts[:2] == ["v3", "settings"]:
@@ -402,14 +415,15 @@ class FakeRancher:
     ) -> httpx.Response:
         if method == "POST":
             cid = self.new_id("c")
-            self.clusters[cid] = {**body, "id": cid, "state": "pending"}
+            # Like Rancher's, a new record reads "active" until it gets conditions.
+            self.clusters[cid] = {**body, "id": cid, "state": "active", "conditions": []}
             return httpx.Response(201, json=self.clusters[cid])
         if len(parts) == 2:
             return _collection([c for c in self.clusters.values() if _matches(c, params)])
         cluster = self.clusters[parts[2]]
         if method == "PUT":
             cluster.update(body)
-        elif cluster["state"] != "active" and self.commands_handed_out:
+        elif not _is_ready(cluster) and self.commands_handed_out:
             self._maybe_activate(cluster)
         return httpx.Response(200, json=cluster)
 
@@ -418,6 +432,7 @@ class FakeRancher:
             return
         if self.polls_until_active <= 0:
             cluster["state"] = "active"
+            cluster["conditions"] = [READY]
         self.polls_until_active -= 1
 
     def _registration_tokens(
@@ -452,24 +467,58 @@ class FakeRancher:
             self.gitrepos[key] = body
         return httpx.Response(200, json=self.gitrepos[key])
 
-    def _tokens(self, method: str, parts: list[str], body: JSON, caller: str) -> httpx.Response:
+    def _tokens(
+        self, method: str, parts: list[str], params: dict[str, str], body: JSON, caller: str
+    ) -> httpx.Response:
+        """Rancher 2.15's v3 tokens (pkg/auth/tokens/manager.go, pkg/auth/logout).
+
+        The logout action deletes the token that signs the request; a DELETE of
+        that same session token is refused with "Use logout instead".
+        """
+        if method == "POST" and params.get("action") == "logout":
+            if self.refuse_logout:
+                return _error(500, "ServerError")
+            self.tokens.pop(self._current_token or "", None)
+            return httpx.Response(200)
         if method == "POST":
             ttl = int(body.get("ttl", 0))
             return httpx.Response(
                 201, json=self._issue(caller, "", body.get("description", ""), ttl)
             )
-        if method == "GET":
+        if method == "GET" and len(parts) == 2:
             mine = [t for t in self.tokens.values() if t["userId"] == caller]
-            return _collection([{k: v for k, v in t.items() if k != "key"} for t in mine])
+            return _collection([_without_key(t) for t in mine])
         token = self.tokens.get(parts[2])
         if token is None or (token["userId"] != caller and caller != "user-admin"):
             return _error(404, "NotFound")
+        if method == "GET":
+            return httpx.Response(200, json=_without_key(token))
+        if parts[2] == self._current_token and token["kind"] == "session":
+            return httpx.Response(
+                400,
+                json={
+                    "type": "error",
+                    "code": "ServerError",
+                    "message": "Cannot delete token for current session. Use logout instead",
+                },
+            )
         del self.tokens[parts[2]]
         return httpx.Response(200, json={})
 
 
+READY: JSON = {"type": "Ready", "status": "True"}
+
+
 def _matches(item: JSON, params: dict[str, str]) -> bool:
     return all(str(item.get(key)) == value for key, value in params.items())
+
+
+def _is_ready(cluster: JSON) -> bool:
+    return READY in (cluster.get("conditions") or [])
+
+
+def _without_key(token: JSON) -> JSON:
+    return {k: v for k, v in token.items() if k != "key"}
 
 
 def _as_v1_binding(binding: JSON) -> JSON:

@@ -123,6 +123,8 @@ def test_req_103_agent_token_is_stored_with_30_day_expiry_and_never_printed(
     for value in secrets_in_play(lab_aws, rancher):
         assert value not in out
         assert value not in err
+    assert f"which signs in and expires {rancher.expires_on_first_use}" in out
+    assert "Note:" not in out
     assert "Rancher is configured." in out
 
 
@@ -154,6 +156,7 @@ def test_req_050_agent_role_reads_only_and_never_touches_secrets(
         "name": "sre-lab-eks",
         "labels": {"cloud": "aws"},
         "state": "active",
+        "conditions": [{"type": "Ready", "status": "True"}],
     }
     rancher.crtbs["crtb-old"] = {
         "id": "crtb-old",
@@ -199,6 +202,7 @@ def test_req_022_fleet_reads_platform_on_main_for_clusters_labelled_cloud_aws(
         "name": "sre-lab-eks",
         "labels": {},
         "state": "active",
+        "conditions": [{"type": "Ready", "status": "True"}],
     }
     rancher.gitrepos["fleet-default/sre-lab-platform"] = {
         "id": "fleet-default/sre-lab-platform",
@@ -388,6 +392,57 @@ def test_req_103_refused_admin_sign_in_fails_without_writes_or_leaks(
     assert lab_aws.secret_value(AGENT_CREDENTIAL) is None
 
 
+def test_req_022_new_cluster_that_reads_active_still_gets_its_registration_command(
+    configure_rancher: ModuleType,
+    lab_aws: Any,
+    rancher: Any,
+    clock: tuple[Any, Any],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """REQ-022: the script waits for Rancher's Ready condition, not the record's state.
+
+    Rancher reads a new cluster record as "active" before its agent connects, so
+    the script must still print the registration command and wait until Rancher
+    reports the cluster Ready, as it did not on the first lab run.
+    """
+    assert run(configure_rancher, lab_aws, rancher, clock) == 0
+
+    out = capsys.readouterr().out
+    assert out.count("kubectl apply -f https://rancher.example.com/v3/import/") == 1
+    assert "Cluster sre-lab-eks: ready." in out
+    (cluster,) = rancher.clusters.values()
+    assert {"type": "Ready", "status": "True"} in cluster["conditions"]
+    assert out.index("Cluster sre-lab-eks: ready.") < out.index("Rancher is configured.")
+
+
+def test_req_103_sessions_log_out_and_a_failed_logout_is_only_a_note(
+    configure_rancher: ModuleType,
+    lab_aws: Any,
+    rancher: Any,
+    clock: tuple[Any, Any],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """REQ-103.1: the script's sessions end by logging out, as Rancher 2.15 requires.
+
+    Rancher refuses to delete the token of the session that asks, so every
+    session the script opened logs itself out. When a logout fails, the run
+    still succeeds and says that the session expires on its own.
+    """
+    assert run(configure_rancher, lab_aws, rancher, clock) == 0
+    assert not [t for t in rancher.tokens.values() if t["kind"] == "session"]
+    assert not [c for c in rancher.calls if c[0] == "DELETE" and c[1].startswith("/v3/tokens/")]
+    assert "Note:" not in capsys.readouterr().out
+
+    rancher.refuse_logout = True
+
+    assert run(configure_rancher, lab_aws, rancher, clock) == 0
+
+    out = capsys.readouterr().out
+    assert out.count("Note: could not log out the session") == 2
+    assert "HTTP 500" in out
+    assert "Rancher is configured." in out
+
+
 def test_req_050_cluster_that_never_turns_active_gets_no_agent_token(
     configure_rancher: ModuleType,
     lab_aws: Any,
@@ -406,6 +461,6 @@ def test_req_050_cluster_that_never_turns_active_gets_no_agent_token(
 
     out, err = capsys.readouterr()
     assert out.count("kubectl apply -f https://rancher.example.com/v3/import/") == 1
-    assert "did not turn active" in err
+    assert "did not turn Ready" in err
     assert rancher.api_tokens_of("sre-agent") == []
     assert lab_aws.secret_value(AGENT_CREDENTIAL) is None
