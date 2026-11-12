@@ -37,30 +37,35 @@ Steps marked **(you)** create, change or delete cloud resources. Run them yourse
 ```bash
 brew tap hashicorp/tap
 brew install hashicorp/tap/terraform gh awscli azure-cli kubectl helm jq uv
-curl -fsSL https://claude.ai/install.sh | bash    # Claude Code, native installer
+curl -fsSL https://claude.ai/install.sh | bash
 ```
 
-Install Docker Desktop (`brew install --cask docker-desktop`, or OrbStack) for the local collector spike (spike C), and open it once to finish setup. Rancher runs on an EC2 instance instead (spike A).
+The last line is Claude Code's native installer. Install Docker Desktop (`brew install --cask docker-desktop`, or OrbStack) for the local collector spike (spike C), and open it once to finish setup. Rancher runs on an EC2 instance instead (spike A).
 
 ## 3. Create the repository (about 20 minutes)
 
 `~/Downloads` is a risky home for a months-long project. If you move the folder (to `~/Projects`, say), do it now, before `git init`.
 
+Put the PR template and the CI workflow, which ship in `tools/github-setup/`, in place, and run the guardrail hook's tests. They must print `26 passed, 0 failed`:
+
 ```bash
 cd ~/Downloads/multi_cloud_agentic_SRE
-# The PR template and the CI workflow ship in tools/github-setup/; put them in place:
 mkdir -p .github/workflows
 cp tools/github-setup/pull_request_template.md .github/
 cp tools/github-setup/methodology-checks.yml .github/workflows/
 chmod +x tools/claude-hooks/*.sh
-bash tools/claude-hooks/test-guard.sh        # expect: 26 passed, 0 failed
+bash tools/claude-hooks/test-guard.sh
+```
+
+Only when they pass, create the repository and push it. Use `--private` instead of `--public` if you have GitHub Pro (see below):
+
+```bash
 git init -b main
 git add .
 git commit -m "chore: Phase 0 scaffold" \
   -m "Drafted with Claude from the project plan; see ADR-0001." \
   -m "Co-Authored-By: Claude <noreply@anthropic.com>"
 gh repo create multi-cloud-agentic-sre --public --source . --push
-# or --private, if you have GitHub Pro
 ```
 
 **Public or private?** GitHub enforces rulesets on private repositories only with GitHub Pro (about US$4 a month); on GitHub Free they need a public repository. Public from day one also gives you free secret scanning with push protection, and an audit trail that was visible as it happened.
@@ -98,13 +103,14 @@ jq --slurpfile add tools/claude-hooks/settings.hooks.json '
 diff -u .claude/settings.json "$merged"
 ```
 
-In the diff, only the `guard-bash.sh` group at the end of `PreToolUse` may change; every AI-DLC hook and permission stays. Then install it, run the hook's tests, and start Claude Code:
+In the diff, only the `guard-bash.sh` group at the end of `PreToolUse` may change; every AI-DLC hook and permission stays. Then install it and run the hook's tests, which must print `26 passed, 0 failed`:
 
 ```bash
 cp "$merged" .claude/settings.json && rm "$merged"
-bash tools/claude-hooks/test-guard.sh        # expect: 26 passed, 0 failed
-claude
+bash tools/claude-hooks/test-guard.sh
 ```
+
+Only when they pass, start Claude Code with `claude`.
 
 In Claude Code, trust the folder. If it asks you to approve the project's hooks, approve them and restart Claude Code. Then test the guardrail: ask Claude to run `terraform apply`. The command must be blocked, and a line must appear in `docs/evidence/hook-audit.jsonl`. Commit, open a PR, fill in the template, and merge.
 

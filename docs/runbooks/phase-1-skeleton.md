@@ -4,6 +4,8 @@ This runbook covers unit u1 of Phase 1: the lab on AWS, a hardened Rancher, and 
 
 Every step marked **(you)** creates, changes or deletes something. Run it yourself, in your admin terminal with the admin profile (`AWS_PROFILE=sre-lab`), on an up-to-date `main`. Never start Claude Code in that terminal (REQ-014). Claude and CI use read-only roles and apply nothing.
 
+Paste each command block on its own, and check its result before the next. A shell keeps running the lines after one that fails, and a command that asks you to type `yes` reads the next pasted line as your answer, so every block ends where you check a result or answer a question. Blocks hold no `#` comments, because zsh passes a comment's words to the command as arguments unless `setopt interactive_comments` is on.
+
 ## Before you start
 
 You need these once.
@@ -12,7 +14,7 @@ You need these once.
 |---|---|---|
 | Your domain, registered in Route 53 | Route 53 console, Registered domains | Its public hosted zone holds `rancher.<your domain>` and the certificate's validation record |
 | Four plain String SSM parameters in `us-east-1` | See below | Your personal values reach Terraform from the account, never from Git |
-| Terraform 1.17.x, the AWS CLI, kubectl, uv | `brew install hashicorp/tap/terraform awscli kubectl uv` | Each root requires Terraform `~> 1.17.1`, as CI uses 1.17.1 |
+| Terraform 1.17.x, the AWS CLI, the Session Manager plugin, kubectl, uv, the GitHub CLI | `brew install hashicorp/tap/terraform awscli kubectl uv gh`, then `brew install --cask session-manager-plugin` | Each root requires Terraform `~> 1.17.1`, as CI uses 1.17.1. Step 4 opens a shell on the Rancher host through Session Manager. Step 2 stores CI's role with `gh`, signed in with `gh auth login` |
 | The coding agent refused the Cognito client secret, before you apply `permanent` | IAM Identity Center, Permission sets, `SreLabReadOnly`, inline policy: add `cognito-idp:DescribeUserPoolClient` to its deny statement, then update the provisioned account | `ReadOnlyAccess` allows `cognito-idp:Describe*`, and `DescribeUserPoolClient` returns the Rancher app client's secret (REQ-013.1) |
 
 The four parameters **(you)**. Type the values in your shell; do not save them in a file. Re-run a command with `--overwrite` to change a value, for example when your public address changes.
@@ -44,51 +46,75 @@ Follow [infra/aws/bootstrap/README.md](../../infra/aws/bootstrap/README.md): app
 
 The certificate for `rancher.<your domain>`, the Cognito user pool and your user, Managed Grafana, the CI plan role, and Transaction Search.
 
-```bash
-terraform -chdir=infra/aws/permanent init
-terraform -chdir=infra/aws/permanent plan -out=permanent.tfplan
-terraform -chdir=infra/aws/permanent apply permanent.tfplan
-```
+1. Initialize and plan:
 
-Then:
+   ```bash
+   terraform -chdir=infra/aws/permanent init
+   terraform -chdir=infra/aws/permanent plan -out=permanent.tfplan
+   ```
 
-1. Give CI its plan role. The ARN carries your account ID, so it goes straight into the repository secret, never onto the screen or into Git:
+   Read the plan before you apply it. The first time, it only adds (`0 to change, 0 to destroy`), and your domain, email and Identity Center user ID appear only as `(sensitive value)`.
+2. Apply it, and wait for `Apply complete!`. The certificate's DNS validation and Grafana take about 10 minutes:
+
+   ```bash
+   terraform -chdir=infra/aws/permanent apply permanent.tfplan
+   ```
+
+3. Only after `Apply complete!`, give CI its plan role, and delete the plan file, which holds your personal values in readable form. The ARN carries your account ID, so it goes straight into the repository secret, never onto the screen or into Git:
 
    ```bash
    terraform -chdir=infra/aws/permanent output -raw ci_plan_role_arn | gh secret set AWS_PLAN_ROLE_ARN
+   gh secret list
+   rm infra/aws/permanent/permanent.tfplan
    ```
 
-   From the next pull request on, the `terraform` workflow plans `permanent` and `lab` and posts the plans.
-2. Cognito emails your user a temporary password. Keep it for your first sign-in to Rancher (step 6).
+   `gh secret list` shows `AWS_PLAN_ROLE_ARN`, updated today. From the next pull request on, the `terraform` workflow plans `permanent` and `lab` and posts the plans.
+4. Cognito emails your user a temporary password from no-reply@verificationemail.com. It is valid for 3 days; keep it for your first sign-in to Rancher (step 6). If it expires, have Cognito send a new one. This prints `FORCE_CHANGE_PASSWORD`:
+
+   ```bash
+   aws cognito-idp admin-create-user --user-pool-id "$(terraform -chdir=infra/aws/permanent output -raw cognito_user_pool_id)" --username operator --message-action RESEND --query User.UserStatus --output text
+   ```
 
 ### 3. lab (you)
 
 The VPC, EKS, the Rancher host, both load balancers and the DNS records.
 
-```bash
-terraform -chdir=infra/aws/lab init
-terraform -chdir=infra/aws/lab plan -out=lab.tfplan
-terraform -chdir=infra/aws/lab apply lab.tfplan
-```
+1. Initialize and plan:
 
-Read the plan before you apply it:
+   ```bash
+   terraform -chdir=infra/aws/lab init
+   terraform -chdir=infra/aws/lab plan -out=lab.tfplan
+   ```
 
-- no `aws_nat_gateway` anywhere (REQ-020, AC2.1.1);
-- `aws_eks_cluster.lab` on version `1.36`, with `upgrade_policy` `STANDARD`;
-- no `*` resource on any write action in a policy (REQ-102.1, until u2 checks this in CI).
+   The plan stops if the pinned Kubernetes version has left EKS standard support (`infra/aws/lab/variables.tf`, `kubernetes_version`).
+2. Read the plan before you apply it:
 
-EKS takes about 15 minutes. The plan stops if the pinned Kubernetes version has left EKS standard support (`infra/aws/lab/variables.tf`, `kubernetes_version`).
+   - no `aws_nat_gateway` anywhere (REQ-020, AC2.1.1);
+   - `aws_eks_cluster.lab` on version `1.36`, with `upgrade_policy` `STANDARD`;
+   - no `*` resource on any write action in a policy (REQ-102.1, until u2 checks this in CI).
+3. Apply it, and wait for `Apply complete!`. EKS takes about 15 minutes:
+
+   ```bash
+   terraform -chdir=infra/aws/lab apply lab.tfplan
+   ```
+
+   Then delete the plan file, which holds your personal values in readable form: `rm infra/aws/lab/lab.tfplan`.
 
 ### 4. Wait for the Rancher host
 
-The host installs K3s and Rancher at first boot, in about ten minutes, and then writes Rancher's generated admin password to the secret `sre-lab/rancher-admin-password`. To follow it **(you)**:
+The host installs K3s and Rancher at first boot, in about ten minutes, and then writes Rancher's generated admin password to the secret `sre-lab/rancher-admin-password`. To follow it **(you)**, open a shell on the host through Session Manager:
 
 ```bash
 aws ssm start-session --target "$(terraform -chdir=infra/aws/lab output -raw rancher_instance_id)"
+```
+
+Then, in that session:
+
+```bash
 sudo journalctl -t rancher-bootstrap -f
 ```
 
-The boot stops, and says why, if a download's SHA-256 does not match its pin.
+Press Ctrl-C to stop following the log, and type `exit` to close the session. The boot stops, and says why, if a download's SHA-256 does not match its pin.
 
 ### 5. Configure Rancher (you)
 
@@ -97,14 +123,16 @@ uv sync --locked
 uv run python tools/lab/configure_rancher.py
 ```
 
-The script is safe to run again. It waits for Rancher, then turns on Cognito sign-in for your user only, creates the `agent-readonly` role and the `sre-agent` user, and registers the EKS cluster. It prints two commands; run them in a second admin terminal:
+The script is safe to run again. It waits up to 30 minutes for Rancher, then turns on Cognito sign-in for your user only, creates the `agent-readonly` role and the `sre-agent` user, and registers the EKS cluster. It then prints two commands, and waits. Copy both from its output, and run them in a second admin terminal (`export AWS_PROFILE=sre-lab AWS_REGION=us-east-1` first). They look like this:
 
-```bash
+```text
 aws eks update-kubeconfig --region us-east-1 --name sre-lab-eks
-kubectl apply -f https://rancher.<your domain>/v3/import/<token>.yaml   # as printed
+kubectl apply -f https://rancher.<your domain>/v3/import/<token>.yaml
 ```
 
-The script waits for the cluster to turn active, points Fleet at `platform/` on `main`, and writes the agent's 30-day token to `sre-lab/rancher-agent-token`. It never prints a password or a token.
+The second command carries the cluster's registration token. Treat it like a password: run it, and never paste it into a chat, an issue or a pull request.
+
+The script waits for the cluster to turn active, points Fleet at `platform/` on `main`, and writes the agent's 30-day token to `sre-lab/rancher-agent-token`. Apart from that registration command, it never prints a password or a token.
 
 ### 6. Sign in to Rancher
 
