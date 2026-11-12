@@ -1,0 +1,62 @@
+# Values for the opentelemetry-collector chart 0.178.3 (Collector contrib
+# 0.163.2): how the platform Collector runs on any cluster (REQ-024). One replica
+# in the observability namespace receives OTLP from the demo. One replica keeps
+# the span metrics to a single writer. What it does on an AWS cluster is in
+# values-aws.yaml.
+mode: deployment
+replicaCount: 1
+fullnameOverride: otel-collector
+
+image:
+  repository: otel/opentelemetry-collector-contrib
+  # 0.163.2, by the digest of its multi-arch index (linux/amd64 and linux/arm64),
+  # read from Docker Hub on 2026-11-12 (REQ-112.1). The chart renders
+  # repository@digest when a digest is set.
+  digest: sha256:7f22d2a6748110ffb6a59bc0df448bccbf501cdb667d610ede4c61d3863d5849
+
+# EKS Pod Identity gives this service account the Collector's IAM role
+# (infra/aws/lab/collector.tf), so the Collector holds no AWS key.
+serviceAccount:
+  create: true
+  name: otel-collector
+
+# Read-only access for the k8s_attributes processor, which adds the pod,
+# namespace and deployment names to logs and traces.
+clusterRole:
+  create: true
+  rules:
+    - apiGroups: [""]
+      resources: [pods, namespaces]
+      verbs: [get, list, watch]
+    - apiGroups: [apps]
+      resources: [replicasets]
+      verbs: [get, list, watch]
+
+# The demo sends OTLP only.
+ports:
+  jaeger-compact:
+    enabled: false
+  jaeger-thrift:
+    enabled: false
+  jaeger-grpc:
+    enabled: false
+  zipkin:
+    enabled: false
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    memory: 512Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]

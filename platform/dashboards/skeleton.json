@@ -1,0 +1,492 @@
+{
+  "uid": "sre-lab-skeleton",
+  "title": "SRE lab: walking skeleton",
+  "description": "u1's one dashboard (REQ-024.1, OD-6): the demo's golden signals per service from Managed Prometheus, the incident pipeline from CloudWatch, and the cost guards. Applied by infra/aws/dashboards from platform/dashboards/skeleton.json; edit it there, not in Grafana.",
+  "tags": ["sre-lab", "u1"],
+  "timezone": "utc",
+  "editable": false,
+  "graphTooltip": 1,
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "annotations": {
+    "list": []
+  },
+  "links": [],
+  "templating": {
+    "list": [
+      {
+        "name": "cluster",
+        "label": "Cluster",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-amazonprometheus-datasource",
+          "uid": "sre-lab-amp"
+        },
+        "query": "label_values(traces_span_metrics_calls_total, cluster)",
+        "definition": "label_values(traces_span_metrics_calls_total, cluster)",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "current": {
+          "selected": true,
+          "text": ["All"],
+          "value": ["$__all"]
+        },
+        "refresh": 2,
+        "sort": 1
+      },
+      {
+        "name": "cloud",
+        "label": "Cloud",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-amazonprometheus-datasource",
+          "uid": "sre-lab-amp"
+        },
+        "query": "label_values(traces_span_metrics_calls_total, cloud)",
+        "definition": "label_values(traces_span_metrics_calls_total, cloud)",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "current": {
+          "selected": true,
+          "text": ["All"],
+          "value": ["$__all"]
+        },
+        "refresh": 2,
+        "sort": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Demo, per service (Managed Prometheus)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Request rate",
+      "description": "Server and consumer spans per second, per service, from the Collector's span metrics.",
+      "datasource": { "type": "grafana-amazonprometheus-datasource", "uid": "sre-lab-amp" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 1 },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-amazonprometheus-datasource", "uid": "sre-lab-amp" },
+          "expr": "sum by (service_name) (rate(traces_span_metrics_calls_total{cluster=~\"$cluster\", cloud=~\"$cloud\", span_kind=~\"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER\"}[$__rate_interval]))",
+          "legendFormat": "{{service_name}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Error rate",
+      "description": "Share of server and consumer spans with an error status, per service. The demo-fault alert fires for payment above 5%.",
+      "datasource": { "type": "grafana-amazonprometheus-datasource", "uid": "sre-lab-amp" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 1 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "custom": { "thresholdsStyle": { "mode": "line" } },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-amazonprometheus-datasource", "uid": "sre-lab-amp" },
+          "expr": "100 * sum by (service_name) (rate(traces_span_metrics_calls_total{cluster=~\"$cluster\", cloud=~\"$cloud\", span_kind=~\"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER\", status_code=\"STATUS_CODE_ERROR\"}[$__rate_interval])) / sum by (service_name) (rate(traces_span_metrics_calls_total{cluster=~\"$cluster\", cloud=~\"$cloud\", span_kind=~\"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER\"}[$__rate_interval]))",
+          "legendFormat": "{{service_name}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Duration, 95th percentile",
+      "description": "95th-percentile duration of server and consumer spans, per service.",
+      "datasource": { "type": "grafana-amazonprometheus-datasource", "uid": "sre-lab-amp" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 1 },
+      "fieldConfig": {
+        "defaults": { "unit": "ms", "min": 0 },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-amazonprometheus-datasource", "uid": "sre-lab-amp" },
+          "expr": "histogram_quantile(0.95, sum by (service_name, le) (rate(traces_span_metrics_duration_milliseconds_bucket{cluster=~\"$cluster\", cloud=~\"$cloud\", span_kind=~\"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER\"}[$__rate_interval])))",
+          "legendFormat": "{{service_name}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "row",
+      "title": "Pipeline (CloudWatch, SreLab/Skeleton)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "panels": []
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Alerts and incidents",
+      "description": "Alerts the intake received and incidents it created. Empty until the intake exists (u1's third pull request).",
+      "datasource": { "type": "cloudwatch", "uid": "sre-lab-cloudwatch" },
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 10 },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0 },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "cloudwatch", "uid": "sre-lab-cloudwatch" },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "region": "default",
+          "namespace": "SreLab/Skeleton",
+          "metricName": "AlertsReceived",
+          "dimensions": {},
+          "matchExact": false,
+          "statistic": "Sum",
+          "period": "",
+          "id": "",
+          "expression": "",
+          "label": "Alerts received"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "cloudwatch", "uid": "sre-lab-cloudwatch" },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "region": "default",
+          "namespace": "SreLab/Skeleton",
+          "metricName": "IncidentsCreated",
+          "dimensions": {},
+          "matchExact": false,
+          "statistic": "Sum",
+          "period": "",
+          "id": "",
+          "expression": "",
+          "label": "Incidents created"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Dead letters",
+      "description": "Alerts the intake dead-lettered, by reason (REQ-140). Any point here is worth a look at the dead-letter queue.",
+      "datasource": { "type": "cloudwatch", "uid": "sre-lab-cloudwatch" },
+      "gridPos": { "h": 8, "w": 6, "x": 6, "y": 10 },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0 },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "cloudwatch", "uid": "sre-lab-cloudwatch" },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "region": "default",
+          "namespace": "SreLab/Skeleton",
+          "metricName": "AlertsDeadLettered",
+          "dimensions": {},
+          "matchExact": false,
+          "statistic": "Sum",
+          "period": "",
+          "id": "",
+          "expression": "",
+          "label": "${PROP('Dim.reason')}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Alert to incident record",
+      "description": "Seconds from the alert firing to the incident record, against the 60 s target (REQ-120.1).",
+      "datasource": { "type": "cloudwatch", "uid": "sre-lab-cloudwatch" },
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 10 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "custom": { "thresholdsStyle": { "mode": "line" } },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 60 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "cloudwatch", "uid": "sre-lab-cloudwatch" },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "region": "default",
+          "namespace": "SreLab/Skeleton",
+          "metricName": "AlertToRecordSeconds",
+          "dimensions": {},
+          "matchExact": false,
+          "statistic": "Maximum",
+          "period": "",
+          "id": "",
+          "expression": "",
+          "label": "Alert to record"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Alert to session start",
+      "description": "Seconds from the alert firing to the agent session starting, against the 120 s target (REQ-120.2).",
+      "datasource": { "type": "cloudwatch", "uid": "sre-lab-cloudwatch" },
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 10 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "custom": { "thresholdsStyle": { "mode": "line" } },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 120 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "cloudwatch", "uid": "sre-lab-cloudwatch" },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "region": "default",
+          "namespace": "SreLab/Skeleton",
+          "metricName": "AlertToSessionSeconds",
+          "dimensions": {},
+          "matchExact": false,
+          "statistic": "Maximum",
+          "period": "",
+          "id": "",
+          "expression": "",
+          "label": "Alert to session"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Cost guards (CloudWatch)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+      "panels": []
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Managed Prometheus active series",
+      "description": "Active series in the workspace, against the 2,000 cap of REQ-130.2 that the Collector's allow-list keeps.",
+      "datasource": { "type": "cloudwatch", "uid": "sre-lab-cloudwatch" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 19 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": { "thresholdsStyle": { "mode": "line" } },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 2000 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "cloudwatch", "uid": "sre-lab-cloudwatch" },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "region": "default",
+          "namespace": "AWS/Usage",
+          "metricName": "ResourceCount",
+          "dimensions": {
+            "Service": "Prometheus",
+            "Type": "Resource",
+            "Resource": "ActiveSeries"
+          },
+          "matchExact": false,
+          "statistic": "Maximum",
+          "period": "",
+          "id": "",
+          "expression": "",
+          "label": "Active series"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "Demo logs, last 24 hours",
+      "description": "Bytes the demo's log group took in over the last 24 hours, against the 1 GB a day guard of REQ-130.2.",
+      "datasource": { "type": "cloudwatch", "uid": "sre-lab-cloudwatch" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 19 },
+      "timeFrom": "24h",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decbytes",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1000000000 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["sum"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "cloudwatch", "uid": "sre-lab-cloudwatch" },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "region": "default",
+          "namespace": "AWS/Logs",
+          "metricName": "IncomingBytes",
+          "dimensions": {
+            "LogGroupName": "/sre-lab/otel-demo"
+          },
+          "matchExact": true,
+          "statistic": "Sum",
+          "period": "3600",
+          "id": "",
+          "expression": "",
+          "label": "Demo logs"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Lambda throttles",
+      "description": "Throttled invocations of each function in the account (REQ-120.5, SC-1). Empty until the intake exists.",
+      "datasource": { "type": "cloudwatch", "uid": "sre-lab-cloudwatch" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 19 },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0 },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "cloudwatch", "uid": "sre-lab-cloudwatch" },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "region": "default",
+          "namespace": "AWS/Lambda",
+          "metricName": "Throttles",
+          "dimensions": {},
+          "matchExact": false,
+          "statistic": "Sum",
+          "period": "",
+          "id": "",
+          "expression": "",
+          "label": "${PROP('Dim.FunctionName')}"
+        }
+      ]
+    }
+  ]
+}

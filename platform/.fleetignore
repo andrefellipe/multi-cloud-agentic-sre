@@ -1,0 +1,10 @@
+# Kept out of the root bundle (platform/fleet.yaml). Fleet packs every file under
+# a bundle's folder, nested bundles included, so these are listed here:
+# - otel-demo and otel-collector are bundles of their own (each has a fleet.yaml);
+# - alerts and dashboards are read by Terraform, not deployed by Fleet;
+# - README.md is documentation.
+README.md
+alerts
+dashboards
+otel-demo
+otel-collector

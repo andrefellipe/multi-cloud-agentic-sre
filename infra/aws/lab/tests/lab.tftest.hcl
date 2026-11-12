@@ -1,7 +1,7 @@
 # terraform test for infra/aws/lab, with a mocked AWS provider: no credentials, no
 # AWS call, no state. It evaluates what `terraform validate` cannot: the sensitive
 # SSM values flowing into resources, the rendered user data, the remote state,
-# and the preconditions. Every value below is synthetic.
+# the preconditions, and the Collector's role. Every value below is synthetic.
 #
 # Run it with: terraform -chdir=infra/aws/lab init -backend=false && terraform -chdir=infra/aws/lab test
 
@@ -75,6 +75,8 @@ override_data {
       rancher_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000"
       public_zone_id          = "Z0000000EXAMPLE"
       ci_plan_role_name       = "sre-lab-ci-terraform-plan"
+      prometheus_workspace_id = "ws-00000000-0000-0000-0000-000000000000"
+      demo_log_group_name     = "/sre-lab/otel-demo"
     }
   }
 }
@@ -194,6 +196,73 @@ run "lab_matches_the_design" {
   assert {
     condition     = data.aws_iam_policy_document.rancher_host.statement[0].actions == toset(["secretsmanager:PutSecretValue"])
     error_message = "The Rancher host may only write the admin password."
+  }
+
+  # REQ-024, SD-1: the Collector's service account, and only it, gets the Collector's role.
+  assert {
+    condition     = aws_eks_pod_identity_association.collector.namespace == "observability" && aws_eks_pod_identity_association.collector.service_account == "otel-collector"
+    error_message = "The role belongs to the service account observability/otel-collector, which platform/otel-collector creates."
+  }
+
+  assert {
+    condition = (
+      one(data.aws_iam_policy_document.collector_trust.statement[0].principals).identifiers == toset(["pods.eks.amazonaws.com"])
+      && toset(data.aws_iam_policy_document.collector_trust.statement[0].actions) == toset(["sts:AssumeRole", "sts:TagSession"])
+    )
+    error_message = "Only EKS Pod Identity may assume the Collector's role."
+  }
+
+  assert {
+    condition = [for statement in data.aws_iam_policy_document.collector.statement : statement.sid] == [
+      "RemoteWriteToTheLabWorkspace",
+      "WriteTheDemoLogGroup",
+      "WriteTraceSpansInThisRegion",
+    ]
+    error_message = "The Collector may write metrics, demo logs and trace spans, and nothing else."
+  }
+
+  assert {
+    condition = (
+      data.aws_iam_policy_document.collector.statement[0].actions == toset(["aps:RemoteWrite"])
+      && data.aws_iam_policy_document.collector.statement[0].resources == toset(["arn:aws:aps:us-east-1:123456789012:workspace/ws-00000000-0000-0000-0000-000000000000"])
+      && data.aws_iam_policy_document.collector.statement[1].actions == toset(["logs:PutLogEvents"])
+      && data.aws_iam_policy_document.collector.statement[1].resources == toset(["arn:aws:logs:us-east-1:123456789012:log-group:/sre-lab/otel-demo:log-stream:*"])
+    )
+    error_message = "Metrics go to the lab workspace and logs to the demo's log group only."
+  }
+
+  # X-Ray has no resource-level permissions for writing spans, so the statement is held to the Region.
+  assert {
+    condition = (
+      data.aws_iam_policy_document.collector.statement[2].actions == toset(["xray:PutTraceSegments"])
+      && one(data.aws_iam_policy_document.collector.statement[2].condition).variable == "aws:RequestedRegion"
+      && one(data.aws_iam_policy_document.collector.statement[2].condition).values == tolist(["us-east-1"])
+    )
+    error_message = "Trace spans may be written in us-east-1 only."
+  }
+}
+
+run "collector_role_waits_for_the_permanent_outputs" {
+  command = plan
+
+  # The permanent layer as it is before PR 2 is applied: none of the new outputs.
+  override_data {
+    target = data.terraform_remote_state.permanent
+    values = {
+      outputs = {
+        rancher_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000"
+        public_zone_id          = "Z0000000EXAMPLE"
+        ci_plan_role_name       = "sre-lab-ci-terraform-plan"
+      }
+    }
+  }
+
+  # The plan warns instead of failing, so CI can plan this root before you apply permanent.
+  expect_failures = [check.permanent_layer_has_the_collector_destinations]
+
+  assert {
+    condition     = [for statement in data.aws_iam_policy_document.collector.statement : statement.sid] == ["WriteTraceSpansInThisRegion"]
+    error_message = "Without the permanent layer's outputs, the role gets no metrics or logs permission."
   }
 }
 

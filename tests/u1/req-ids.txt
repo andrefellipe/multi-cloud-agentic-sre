@@ -17,3 +17,8 @@ REQ-021.1
 REQ-022
 REQ-050.1
 REQ-103.1
+
+# PR 2 (feat/REQ-023-demo-telemetry-alerts) adds no pytest test. Its requirements
+# are checked outside pytest, so they are not listed: REQ-023, REQ-024, REQ-030
+# and REQ-130.2 by terraform test (infra/aws/permanent, lab and dashboards) and
+# promtool test rules (platform/alerts/tests/), REQ-112.1 by the pin check.

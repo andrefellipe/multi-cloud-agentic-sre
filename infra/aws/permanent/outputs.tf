@@ -44,3 +44,34 @@ output "ci_plan_role_name" {
   description = "Name of the CI plan role; infra/aws/lab refuses it the Rancher secrets."
   value       = aws_iam_role.ci_plan.name
 }
+
+output "prometheus_workspace_id" {
+  description = "The Managed Prometheus workspace. Read by infra/aws/lab for the Collector's role, and set once in platform/otel-collector/values-aws.yaml."
+  value       = aws_prometheus_workspace.sre_lab.id
+}
+
+output "prometheus_endpoint" {
+  description = "The workspace's Prometheus endpoint; infra/aws/dashboards points Grafana at it."
+  value       = aws_prometheus_workspace.sre_lab.prometheus_endpoint
+}
+
+output "lab_alerts_topic_arn" {
+  description = "The lab topic (LC1) the alert manager publishes to; the intake subscribes to it."
+  value       = aws_sns_topic.lab_alerts.arn
+  sensitive   = true
+}
+
+output "demo_log_group_name" {
+  description = "The demo's log group; infra/aws/lab lets the Collector write to it."
+  value       = aws_cloudwatch_log_group.demo.name
+}
+
+output "grafana_workspace_id" {
+  description = "The Managed Grafana workspace, for creating the dashboards root's short-lived token."
+  value       = aws_grafana_workspace.sre_lab.id
+}
+
+output "grafana_dashboards_service_account_id" {
+  description = "The Grafana service account infra/aws/dashboards applies with."
+  value       = aws_grafana_workspace_service_account.dashboards.service_account_id
+}

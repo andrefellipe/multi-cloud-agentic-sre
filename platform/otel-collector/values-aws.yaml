@@ -1,0 +1,144 @@
+# What the platform Collector does on a cluster labelled cloud=aws (REQ-024,
+# REQ-130.2, BR8.6, monitoring-design.md). Fleet adds this file to values.yaml
+# for those clusters (fleet.yaml). The Collector:
+# - labels everything with cluster=sre-lab-eks and cloud=aws: metrics through the
+#   exporter's external labels, logs and traces as resource attributes;
+# - turns the demo's server and consumer spans into request, error and duration
+#   metrics per service (span metrics), from every span, before any sampling;
+# - exports only those metrics to Managed Prometheus: the allow-list keeps the
+#   series count well under 2,000 (SC-4). The resource metrics u5 will read are
+#   added to the allow-list in u5, with the labels its queries need;
+# - exports 10% of traces to CloudWatch (the X-Ray OTLP endpoint, Transaction
+#   Search), and logs at warning level and above to the log group
+#   /sre-lab/otel-demo, kept 3 days (infra/aws/permanent);
+# - signs every request with SigV4, with the credentials EKS Pod Identity gives
+#   its service account.
+# fleet.yaml sets helm.disablePreProcess, so ${env:...} reaches the Collector as written.
+
+extraEnvs:
+  # The Managed Prometheus workspace, created by infra/aws/permanent. Set this
+  # once, after the first apply of that root, to the output of:
+  #   terraform -chdir=infra/aws/permanent output -raw prometheus_workspace_id
+  # (docs/runbooks/phase-1-skeleton.md). A workspace ID is not a secret.
+  - name: PROMETHEUS_WORKSPACE_ID
+    value: SET-ME
+
+alternateConfig:
+  extensions:
+    health_check:
+      endpoint: ${env:MY_POD_IP}:13133
+    sigv4auth/aps:
+      region: us-east-1
+      service: aps
+    sigv4auth/logs:
+      region: us-east-1
+      service: logs
+    sigv4auth/xray:
+      region: us-east-1
+      service: xray
+
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: ${env:MY_POD_IP}:4317
+        http:
+          endpoint: ${env:MY_POD_IP}:4318
+
+  connectors:
+    span_metrics:
+      histogram:
+        explicit:
+          buckets: [5ms, 10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2500ms, 5s]
+      # Per service, span kind and status only: the span name would multiply the
+      # series, and one replica needs no per-instance ID.
+      exclude_dimensions: [span.name, collector.instance.id]
+      metrics_flush_interval: 60s
+
+  processors:
+    memory_limiter:
+      check_interval: 5s
+      limit_percentage: 80
+      spike_limit_percentage: 25
+    # Each filter below drops what its conditions match.
+    filter/requests_only:
+      trace_conditions:
+        - span.kind != SPAN_KIND_SERVER and span.kind != SPAN_KIND_CONSUMER
+    filter/metric_allow_list:
+      metric_conditions:
+        - metric.name != "traces.span.metrics.calls" and metric.name != "traces.span.metrics.duration"
+    filter/warning_and_above:
+      log_conditions:
+        - log.severity_number < SEVERITY_NUMBER_WARN
+    probabilistic_sampler:
+      sampling_percentage: 10
+    k8s_attributes:
+      passthrough: false
+      pod_association:
+        - sources:
+            - from: resource_attribute
+              name: k8s.pod.ip
+        - sources:
+            - from: connection
+      extract:
+        metadata:
+          - k8s.namespace.name
+          - k8s.pod.name
+          - k8s.deployment.name
+          - k8s.node.name
+    resource/cluster:
+      attributes:
+        - key: cluster
+          value: sre-lab-eks
+          action: upsert
+        - key: cloud
+          value: aws
+          action: upsert
+    batch:
+      send_batch_size: 500
+      send_batch_max_size: 1000
+      timeout: 10s
+
+  exporters:
+    prometheus_remote_write:
+      endpoint: https://aps-workspaces.us-east-1.amazonaws.com/workspaces/${env:PROMETHEUS_WORKSPACE_ID}/api/v1/remote_write
+      auth:
+        authenticator: sigv4auth/aps
+      external_labels:
+        cluster: sre-lab-eks
+        cloud: aws
+      target_info:
+        enabled: false
+    otlp_http/logs:
+      logs_endpoint: https://logs.us-east-1.amazonaws.com/v1/logs
+      compression: gzip
+      headers:
+        x-aws-log-group: /sre-lab/otel-demo
+        x-aws-log-stream: sre-lab-eks
+      auth:
+        authenticator: sigv4auth/logs
+    otlp_http/traces:
+      traces_endpoint: https://xray.us-east-1.amazonaws.com/v1/traces
+      compression: gzip
+      auth:
+        authenticator: sigv4auth/xray
+
+  service:
+    extensions: [health_check, sigv4auth/aps, sigv4auth/logs, sigv4auth/xray]
+    pipelines:
+      traces/span_metrics:
+        receivers: [otlp]
+        processors: [memory_limiter, filter/requests_only]
+        exporters: [span_metrics]
+      traces:
+        receivers: [otlp]
+        processors: [memory_limiter, probabilistic_sampler, k8s_attributes, resource/cluster, batch]
+        exporters: [otlp_http/traces]
+      metrics:
+        receivers: [otlp, span_metrics]
+        processors: [memory_limiter, filter/metric_allow_list, batch]
+        exporters: [prometheus_remote_write]
+      logs:
+        receivers: [otlp]
+        processors: [memory_limiter, filter/warning_and_above, k8s_attributes, resource/cluster, batch]
+        exporters: [otlp_http/logs]

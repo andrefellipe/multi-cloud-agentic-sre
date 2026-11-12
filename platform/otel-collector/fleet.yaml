@@ -1,0 +1,30 @@
+# The platform OpenTelemetry Collector, from the contrib distribution's Helm chart
+# pinned by version (REQ-024, REQ-112.1). values.yaml is how it runs on any
+# cluster; values-aws.yaml is what it does on a cluster labelled cloud=aws.
+name: sre-lab-otel-collector
+
+labels:
+  sre-lab/bundle: otel-collector
+
+defaultNamespace: observability
+
+helm:
+  releaseName: otel-collector
+  repo: https://open-telemetry.github.io/opentelemetry-helm-charts
+  chart: opentelemetry-collector
+  # 0.178.3 (Collector 0.163.2), the newest release on 2026-11-12.
+  version: 0.178.3
+  valuesFiles:
+    - values.yaml
+  # The Collector's configuration uses ${env:...}, which is also the syntax of
+  # Fleet's templating; Fleet must pass the values to Helm untouched.
+  disablePreProcess: true
+
+targetCustomizations:
+  - name: aws
+    clusterSelector:
+      matchLabels:
+        cloud: aws
+    helm:
+      valuesFiles:
+        - values-aws.yaml

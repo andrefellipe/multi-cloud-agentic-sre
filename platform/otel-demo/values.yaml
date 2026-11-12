@@ -1,0 +1,187 @@
+# Values for the OpenTelemetry Demo chart 0.42.6 (app 3.1.0), the same on every
+# cloud (REQ-023). Fleet passes them to Helm unchanged (fleet.yaml).
+#
+# - Images are pinned by digest (REQ-112.1). The chart builds each demo image as
+#   ghcr.io/open-telemetry/demo:<tag>, so each tag below is "3.1.0-<component>"
+#   plus the digest of its multi-arch index (linux/amd64 and linux/arm64, for the
+#   Graviton nodes). The chart's init containers use busybox:latest, so each one
+#   is restated with busybox 1.38.0 by digest. Digests were read from the
+#   registries on 2026-11-12.
+# - The chart's own Collector, Jaeger, Prometheus, Grafana and OpenSearch are off.
+#   Every service sends OTLP to the platform Collector (platform/otel-collector),
+#   which exports to Managed Prometheus and CloudWatch (REQ-024).
+# - The load generator runs at its lowest setting: one simulated user and no
+#   browser traffic (scalability-design.md, SC-4).
+# - flagd reads the base flags from the ConfigMap flagd-base-flags, which the root
+#   bundle generates from platform/base/flags/demo.flagd.json (BR8.5). flagd
+#   reloads the file when the ConfigMap changes, so the running flags follow Git.
+#   The flagd UI sidecar is removed, because it edits a copy that flagd no longer
+#   reads; a flag is set out of band by editing that ConfigMap in the cluster,
+#   which Fleet then shows as drift (docs/runbooks/phase-1-skeleton.md). The
+#   chart's own ConfigMap flagd-config is still created, and is unused.
+
+default:
+  envOverrides:
+    - name: OTEL_COLLECTOR_NAME
+      value: otel-collector.observability.svc.cluster.local
+
+components:
+  accounting:
+    imageOverride:
+      tag: "3.1.0-accounting@sha256:bfd9d13ac58a4eb5eb5130aa9ac1920686e2214030f4f2ab8bf178121879fcd9"
+    initContainers:
+      - name: wait-for-kafka
+        image: busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
+        command: ["sh", "-c", "until nc -z -v -w30 kafka 9092; do echo waiting for kafka; sleep 2; done;"]
+
+  ad:
+    imageOverride:
+      tag: "3.1.0-ad@sha256:dfd7a4697116d7f961f2c6e8be1bd187f2af7555d6d4138c016097921d7c7ed0"
+
+  agent:
+    imageOverride:
+      tag: "3.1.0-agent@sha256:d0f4ae0b32a84c66ed7829e1ae726b254a3b2ea671cc57b5122a9ce266230dab"
+
+  cart:
+    imageOverride:
+      tag: "3.1.0-cart@sha256:17c881cf29af5032e47d3dbd677afb132cbde66aad6355c7c2af8a6dbfc80581"
+    initContainers:
+      - name: wait-for-valkey-cart
+        image: busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
+        command: ["sh", "-c", "until nc -z -v -w30 valkey-cart 6379; do echo waiting for valkey-cart; sleep 2; done;"]
+
+  chatbot:
+    imageOverride:
+      tag: "3.1.0-chatbot@sha256:604b1f493c92e54c342c3bcdddcb012e6b4537726ece7021017fcc4081d2bac0"
+
+  checkout:
+    imageOverride:
+      tag: "3.1.0-checkout@sha256:d4448ff541290fc57cca71d4bfd35d522959edf62a8bb55158467583f9fad4e2"
+    initContainers:
+      - name: wait-for-kafka
+        image: busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
+        command: ["sh", "-c", "until nc -z -v -w30 kafka 9092; do echo waiting for kafka; sleep 2; done;"]
+
+  currency:
+    imageOverride:
+      tag: "3.1.0-currency@sha256:ba65e72d5841f909e0ee09498572092923f59e249ae4bf084ab63a82b33811c1"
+
+  email:
+    imageOverride:
+      tag: "3.1.0-email@sha256:bd7754c1e0986f892b86ed6ab9067a372640d342ff8eee2074bedb61c649ce71"
+
+  fraud-detection:
+    imageOverride:
+      tag: "3.1.0-fraud-detection@sha256:a07ee694304b23e3e4e1ca9bdaa7a02e3eb30d1805d87dfe95e7ea31cd3aa703"
+    initContainers:
+      - name: wait-for-kafka
+        image: busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
+        command: ["sh", "-c", "until nc -z -v -w30 kafka 9092; do echo waiting for kafka; sleep 2; done;"]
+
+  frontend:
+    imageOverride:
+      tag: "3.1.0-frontend@sha256:28358db4620686eda30dfabfc770b9ff0db73819ebac0895064271b446110289"
+
+  frontend-proxy:
+    imageOverride:
+      tag: "3.1.0-frontend-proxy@sha256:fd4da88bfeaadd9437a4ee00f708e129a9eedb9c48874cea8e94b034983280a1"
+
+  image-provider:
+    imageOverride:
+      tag: "3.1.0-image-provider@sha256:46d1a7e95109c0064122ca0bfb49cd05191fb90a6264b6be508e0d98f2c963f1"
+
+  load-generator:
+    imageOverride:
+      tag: "3.1.0-load-generator@sha256:b130d6cee6cb36a2799787a553168811e3ccc5408fe5dad0bc4b4d8302c7a63c"
+    envOverrides:
+      - name: LOCUST_USERS
+        value: "1"
+      - name: LOCUST_BROWSER_TRAFFIC_ENABLED
+        value: "false"
+
+  mcp:
+    imageOverride:
+      tag: "3.1.0-mcp@sha256:81db69cdd0b683d9214d30089b539c904d6a9fe93253f26155e88ed2db87bba7"
+
+  payment:
+    imageOverride:
+      tag: "3.1.0-payment@sha256:10d6bd20d8a00abe7705d553ab23a4f35e29b2816ab021049e63e89d07cc9192"
+
+  product-catalog:
+    imageOverride:
+      tag: "3.1.0-product-catalog@sha256:7578cbf65fa4f0fc68e077e4f299ecccaa31d9778d407e41ab5973d247fd4b8e"
+    initContainers:
+      - name: wait-for-astronomy-db
+        image: busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
+        command: ["sh", "-c", "until nc -z -v -w30 astronomy-db 5432; do echo waiting for astronomy-db; sleep 2; done;"]
+
+  quote:
+    imageOverride:
+      tag: "3.1.0-quote@sha256:e0b1ab3784fdbf0112521d3c5c733643f1cefa4eef5f592f845977465400181e"
+
+  recommendation:
+    imageOverride:
+      tag: "3.1.0-recommendation@sha256:9dd7d7c320d2794a87c78cf534892519dace661a9022eb2cad5de1b75d994c18"
+
+  shipping:
+    imageOverride:
+      tag: "3.1.0-shipping@sha256:7130dba0e77e90575b3f04fa8be39182cffe05f39df586a6620e9d221ee31e77"
+    initContainers:
+      - name: wait-for-flagd
+        image: busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
+        command: ["sh", "-c", "until nc -z -v -w30 flagd 8013; do echo waiting for flagd; sleep 2; done;"]
+
+  flagd:
+    imageOverride:
+      repository: ghcr.io/open-feature/flagd
+      tag: "v0.16.0@sha256:32234e63c1d0634883aabd31cbd46802934aaaef0153dfd653b5d1017940bb4e"
+    # The chart's command reads ./etc/flagd/demo.flagd.json from the working
+    # directory /, which is now the ConfigMap, mounted whole so that updates arrive.
+    mountedEmptyDirs: []
+    initContainers: []
+    sidecarContainers: []
+    additionalVolumes:
+      - name: base-flags
+        configMap:
+          name: flagd-base-flags
+    additionalVolumeMounts:
+      - name: base-flags
+        mountPath: /etc/flagd
+        readOnly: true
+
+  kafka:
+    imageOverride:
+      tag: "3.1.0-kafka@sha256:4402ba7fd54470782a445f07c67e1d3f44d88ac8c5c0abf5d8298190a3f7a6ee"
+
+  astronomy-db:
+    imageOverride:
+      repository: postgres
+      tag: "18.4@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636"
+
+  valkey-cart:
+    imageOverride:
+      repository: ghcr.io/valkey-io/valkey
+      tag: "9.0.4-alpine3.23@sha256:107b203169a20ef7c87548c157f4e4a833dbbbd20fefd3a26740b7f98ac80216"
+
+  telemetry-docs:
+    imageOverride:
+      tag: "3.1.0-telemetry-docs@sha256:3f257a843222df2462d903fd57b12af5f31dc99a0f174b45136a4f3ba5c71203"
+
+  opamp-server:
+    imageOverride:
+      tag: "3.1.0-opamp-server@sha256:3b6c6220bf9c7d8e6fdb8d1966316e80c5ac2004db6ae29c46681009d50e2093"
+
+opentelemetry-collector:
+  enabled: false
+
+jaeger:
+  enabled: false
+
+prometheus:
+  enabled: false
+
+grafana:
+  enabled: false
+
+opensearch:
+  enabled: false
