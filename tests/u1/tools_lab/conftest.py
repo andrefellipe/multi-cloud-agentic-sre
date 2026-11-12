@@ -152,7 +152,8 @@ def _collection(items: list[JSON]) -> httpx.Response:
 class FakeRancher:
     """An in-memory Rancher API for configure_rancher.py.
 
-    Switches: ``ready`` (answers /ping), ``reject_logins``, and
+    Switches: ``ready`` (answers /ping), ``reject_logins``,
+    ``refuse_global_role_bindings`` (the /v1 API refuses new bindings), and
     ``polls_until_active``: how many cluster reads after the registration command
     was handed out before the cluster turns active, or None for never.
     """
@@ -160,6 +161,7 @@ class FakeRancher:
     admin_password: str
     ready: bool = True
     reject_logins: bool = False
+    refuse_global_role_bindings: bool = False
     polls_until_active: int | None = 1
     passwords: dict[str, str] = field(default_factory=dict)
     users: dict[str, JSON] = field(default_factory=dict)
@@ -204,7 +206,7 @@ class FakeRancher:
         return [(method, path) for method, path in self.calls if method != "GET"]
 
     def user_id(self, username: str) -> str:
-        return next(uid for uid, user in self.users.items() if user["username"] == username)
+        return next(uid for uid, user in self.users.items() if user.get("username") == username)
 
     def api_tokens_of(self, username: str) -> list[JSON]:
         uid = self.user_id(username)
@@ -280,8 +282,11 @@ class FakeRancher:
             return self._registration_tokens(method, params, body)
         if parts[:2] == ["v1", "fleet.cattle.io.gitrepos"]:
             return self._gitrepos(method, parts, body)
+        if parts[:2] == ["v1", "management.cattle.io.globalrolebindings"]:
+            return self._v1_globalrolebindings(method, body)
+        if parts[:2] == ["v3", "globalrolebindings"]:
+            return self._v3_globalrolebindings(method, parts, params, body)
         collections = {
-            "globalrolebindings": (self.globalrolebindings, "grb"),
             "roletemplates": (self.roletemplates, "rt"),
             "clusterroletemplatebindings": (self.crtbs, "crtb"),
         }
@@ -308,6 +313,66 @@ class FakeRancher:
             return httpx.Response(200, json=store[parts[2]])
         store.pop(parts[2])
         return httpx.Response(200, json={})
+
+    def _v3_globalrolebindings(
+        self, method: str, parts: list[str], params: dict[str, str], body: JSON
+    ) -> httpx.Response:
+        """Rancher 2.15's v3 validator: a new binding names exactly one user or one group.
+
+        A binding that names only a user principal is refused, as the real Rancher
+        refused it (pkg/api/norman/customization/globalrolebinding/validator.go).
+        """
+        if method == "POST" and (body.get("userId") is None) == (
+            body.get("groupPrincipalId") is None
+        ):
+            return httpx.Response(
+                422,
+                json={
+                    "type": "error",
+                    "code": "InvalidBodyContent",
+                    "message": "must contain field [groupPrincipalId] OR field [userId]",
+                },
+            )
+        return self._generic(self.globalrolebindings, "grb", method, parts, params, body)
+
+    def _v1_globalrolebindings(self, method: str, body: JSON) -> httpx.Response:
+        """The /v1 (Kubernetes) view of the same bindings, with the webhook and controller rules.
+
+        The webhook needs a user (userName or userPrincipalName) or a group, not both.
+        For a binding that names only a user principal, the controller creates the
+        Rancher user for that principal and binds the role to it.
+        """
+        if method == "GET":
+            return _collection([_as_v1_binding(g) for g in self.globalrolebindings.values()])
+        principal = body.get("userPrincipalName")
+        group = body.get("groupPrincipalName")
+        if self.refuse_global_role_bindings or bool(body.get("userName") or principal) == bool(
+            group
+        ):
+            return _error(422, "Invalid")
+        binding_id = self.new_id("grb")
+        binding: JSON = {"id": binding_id, "globalRoleId": body["globalRoleName"]}
+        if group:
+            binding["groupPrincipalId"] = group
+        else:
+            binding["userId"] = body.get("userName") or self._ensure_user(principal)
+            binding["userPrincipalId"] = principal
+        self.globalrolebindings[binding_id] = binding
+        return httpx.Response(201, json=_as_v1_binding(binding))
+
+    def _ensure_user(self, principal: str) -> str:
+        """Return the user that holds ``principal``, creating it as Rancher's EnsureUser does."""
+        for user_id, user in self.users.items():
+            if principal in user.get("principalIds", []):
+                return user_id
+        user_id = self.new_id("u")
+        self.users[user_id] = {
+            "id": user_id,
+            "type": "user",
+            "principalIds": [principal],
+            "enabled": True,
+        }
+        return user_id
 
     def _settings(self, method: str, name: str, body: JSON) -> httpx.Response:
         if method == "PUT":
@@ -405,6 +470,22 @@ class FakeRancher:
 
 def _matches(item: JSON, params: dict[str, str]) -> bool:
     return all(str(item.get(key)) == value for key, value in params.items())
+
+
+def _as_v1_binding(binding: JSON) -> JSON:
+    """Show a stored binding as Rancher's /v1 API does, with Kubernetes field names."""
+    fields = {
+        "globalRoleName": binding.get("globalRoleId"),
+        "userName": binding.get("userId"),
+        "userPrincipalName": binding.get("userPrincipalId"),
+        "groupPrincipalName": binding.get("groupPrincipalId"),
+    }
+    return {
+        "id": binding["id"],
+        "type": "management.cattle.io.globalrolebinding",
+        "metadata": {"name": binding["id"]},
+        **{key: value for key, value in fields.items() if value is not None},
+    }
 
 
 @pytest.fixture
