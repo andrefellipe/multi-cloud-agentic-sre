@@ -73,3 +73,12 @@ resource "aws_grafana_role_association" "admin" {
   role         = "ADMIN"
   user_ids     = [data.aws_ssm_parameter.idc_user_id.value]
 }
+
+# The identity infra/aws/dashboards applies with: its data sources need the Admin
+# role. It holds no token. You create a 30-minute token for each apply of that
+# root, and it lives only in your shell (docs/runbooks/phase-1-skeleton.md).
+resource "aws_grafana_workspace_service_account" "dashboards" {
+  name         = "terraform-dashboards"
+  grafana_role = "ADMIN"
+  workspace_id = aws_grafana_workspace.sre_lab.id
+}

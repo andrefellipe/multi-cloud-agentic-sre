@@ -1,0 +1,51 @@
+# The alert manager definition of the lab's Managed Prometheus workspace
+# (REQ-030, BR8.7, PD-4), rendered by alerting.tf with the lab topic's ARN.
+#
+# Routing: every alert goes to the lab topic, grouped by service and alert name,
+# so a new kind of alert for a service starts a group of its own. A new group
+# waits 10 s, a late joiner to a notified group at most 15 s, and a repeat comes
+# after 1 h (BR2.5). Resolved alerts are sent too (BR3.5).
+#
+# Message: the SNS body is the JSON of contract C1, which the intake reads. The
+# template follows AWS's JSON example for the alert manager ("Configure alert
+# manager to send messages to Amazon SNS as JSON"), with three changes:
+# - only what C1 needs: receiver, status, and per alert its status, labels,
+#   start and end times and fingerprint. Annotations are free text, which could
+#   break the JSON and which the intake drops anyway (BR1.4);
+# - times in RFC 3339 in UTC, as C1's date-time requires, instead of Go's
+#   default time format;
+# - labels in name order, so the same alert always renders the same.
+# Like AWS's example, it does not escape label values, which come from the rule
+# file (platform/alerts/) and the Collector's labels; none contains a quote or
+# a backslash. A message that is not valid JSON is dead-lettered whole by the
+# intake (BR1.2), and the workspace logs a template error to its log group.
+template_files:
+  default_template: |
+    {{ define "sns.default.subject" }}[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}]{{ end }}
+    {{ define "sns.default.message" -}}
+    { "receiver": "{{ .Receiver }}", "status": "{{ .Status }}", "alerts": [
+    {{- range $index, $alert := .Alerts }}{{ if $index }},{{ end }}
+      { "status": "{{ $alert.Status }}",
+        "labels": { {{- range $labelIndex, $label := $alert.Labels.SortedPairs }}{{ if $labelIndex }}, {{ end }}"{{ $label.Name }}": "{{ $label.Value }}"{{ end -}} },
+        "startsAt": "{{ $alert.StartsAt.UTC.Format "2006-01-02T15:04:05.999999999Z07:00" }}",
+        "endsAt": "{{ $alert.EndsAt.UTC.Format "2006-01-02T15:04:05.999999999Z07:00" }}",
+        "fingerprint": "{{ $alert.Fingerprint }}" }
+    {{- end }}
+    ] }
+    {{- end }}
+alertmanager_config: |
+  templates:
+    - 'default_template'
+  route:
+    receiver: lab-topic
+    group_by: ['service', 'alertname']
+    group_wait: 10s
+    group_interval: 15s
+    repeat_interval: 1h
+  receivers:
+    - name: lab-topic
+      sns_configs:
+        - topic_arn: ${lab_alerts_topic_arn}
+          sigv4:
+            region: ${region}
+          send_resolved: true

@@ -1,0 +1,12 @@
+# The cloud=aws overlay: what the root bundle (platform/fleet.yaml) deploys to
+# clusters labelled cloud=aws (REQ-022). It takes the shared base as it is and
+# labels what it deploys with the cloud. Phase 5 adds platform/overlays/azure.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+labels:
+  - pairs:
+      cloud: aws

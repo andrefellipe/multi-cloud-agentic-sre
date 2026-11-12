@@ -1,0 +1,36 @@
+# Alert rules for the fault the skeleton demo injects: payment charges failing,
+# set out of band with the demo flag paymentFailure (REQ-030, BR8.7).
+#
+# Managed Prometheus evaluates rules in the workspace, not in the cluster, so
+# infra/aws/permanent loads this file into the rule group namespace "demo-fault"
+# (logical-components.md, "One change from Inception"). Fleet does not deploy it
+# (platform/.fleetignore).
+#
+# Every rule carries the five labels of contract C1: alertname (the rule's name),
+# severity and service (set below), and cluster and cloud, kept from the series by
+# "by (cluster, cloud)" (the Collector labels every series, REQ-024).
+# tests/demo-fault.test.yaml checks the exact label set with promtool. The alert
+# manager groups by service and alertname and publishes to the lab topic only.
+#
+# The series come from the Collector's span metrics: one count per service, span
+# kind and status code. u5 adds the rules the agents act on.
+groups:
+  - name: demo-fault
+    interval: 1m
+    rules:
+      - alert: PaymentErrorRatioHigh
+        expr: |
+          sum by (cluster, cloud) (
+            rate(traces_span_metrics_calls_total{service_name="payment", span_kind="SPAN_KIND_SERVER", status_code="STATUS_CODE_ERROR"}[5m])
+          )
+            /
+          sum by (cluster, cloud) (
+            rate(traces_span_metrics_calls_total{service_name="payment", span_kind="SPAN_KIND_SERVER"}[5m])
+          )
+            > 0.05
+        for: 1m
+        labels:
+          severity: critical
+          service: payment
+        annotations:
+          summary: More than 5% of payment charges failed over the last 5 minutes.

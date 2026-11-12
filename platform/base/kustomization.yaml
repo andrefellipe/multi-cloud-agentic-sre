@@ -1,0 +1,24 @@
+# Plain manifests shared by every cloud. Each cloud's overlay under
+# platform/overlays/ builds on this base, and the root bundle
+# (platform/fleet.yaml) deploys the overlay that matches the cluster's cloud label.
+#
+# Today the base holds the demo's base feature flags (REQ-023, BR8.5): the
+# ConfigMap flagd-base-flags, generated from flags/demo.flagd.json. flagd reads it
+# directly (platform/otel-demo/values.yaml), so a change merged here reaches the
+# running flags within about a minute, and a change made in the cluster out of
+# band shows in Fleet as drift on this bundle. The name carries no hash suffix,
+# because the demo's bundle mounts it by name.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: otel-demo
+
+configMapGenerator:
+  - name: flagd-base-flags
+    files:
+      - demo.flagd.json=flags/demo.flagd.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        app.kubernetes.io/part-of: opentelemetry-demo
+        app.kubernetes.io/name: flagd-base-flags

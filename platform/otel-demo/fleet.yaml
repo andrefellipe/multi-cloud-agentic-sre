@@ -1,0 +1,28 @@
+# The OpenTelemetry Demo (Astronomy Shop), from its Helm chart pinned by version
+# (REQ-023, REQ-112.1). values.yaml pins every image by digest, points the demo at
+# the platform Collector, runs the load generator at its lowest setting, and
+# makes flagd read the base flags that the root bundle deploys (BR8.5).
+name: sre-lab-otel-demo
+
+labels:
+  sre-lab/bundle: otel-demo
+
+defaultNamespace: otel-demo
+
+helm:
+  releaseName: otel-demo
+  repo: https://open-telemetry.github.io/opentelemetry-helm-charts
+  chart: opentelemetry-demo
+  # 0.42.6 (app 3.1.0), the newest release on 2026-11-12.
+  version: 0.42.6
+  valuesFiles:
+    - values.yaml
+  # The values are passed to Helm exactly as written; Fleet's own templating is not used.
+  disablePreProcess: true
+
+# flagd mounts the ConfigMap flagd-base-flags from the root bundle, so the demo
+# starts only after that bundle is Ready.
+dependsOn:
+  - selector:
+      matchLabels:
+        sre-lab/bundle: demo-flags

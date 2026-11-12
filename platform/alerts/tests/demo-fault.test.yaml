@@ -1,0 +1,88 @@
+# promtool unit tests for ../demo-fault.yaml (REQ-030, BR8.7). Run from the
+# repository root:
+#   promtool test rules platform/alerts/tests/demo-fault.test.yaml
+# promtool compares the full label set of each alert, so the first test proves the
+# alert carries exactly the five labels of contract C1, and nothing else:
+# alertname, severity, service, cluster and cloud.
+rule_files:
+  - ../demo-fault.yaml
+
+evaluation_interval: 1m
+
+tests:
+  - name: failing payment charges raise the alert with the five C1 labels
+    interval: 1m
+    input_series:
+      - series: 'traces_span_metrics_calls_total{cluster="sre-lab-eks", cloud="aws", service_name="payment", span_kind="SPAN_KIND_SERVER", status_code="STATUS_CODE_ERROR"}'
+        values: '0+2x15'
+      - series: 'traces_span_metrics_calls_total{cluster="sre-lab-eks", cloud="aws", service_name="payment", span_kind="SPAN_KIND_SERVER", status_code="STATUS_CODE_UNSET"}'
+        values: '0+1x15'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: PaymentErrorRatioHigh
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              service: payment
+              cluster: sre-lab-eks
+              cloud: aws
+            exp_annotations:
+              summary: More than 5% of payment charges failed over the last 5 minutes.
+
+  - name: a healthy payment service raises nothing
+    interval: 1m
+    input_series:
+      - series: 'traces_span_metrics_calls_total{cluster="sre-lab-eks", cloud="aws", service_name="payment", span_kind="SPAN_KIND_SERVER", status_code="STATUS_CODE_UNSET"}'
+        values: '0+3x15'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: PaymentErrorRatioHigh
+        exp_alerts: []
+
+  - name: failures below 5 percent raise nothing
+    interval: 1m
+    input_series:
+      - series: 'traces_span_metrics_calls_total{cluster="sre-lab-eks", cloud="aws", service_name="payment", span_kind="SPAN_KIND_SERVER", status_code="STATUS_CODE_ERROR"}'
+        values: '0+1x15'
+      - series: 'traces_span_metrics_calls_total{cluster="sre-lab-eks", cloud="aws", service_name="payment", span_kind="SPAN_KIND_SERVER", status_code="STATUS_CODE_UNSET"}'
+        values: '0+49x15'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: PaymentErrorRatioHigh
+        exp_alerts: []
+
+  - name: another service's errors and the payment client's spans raise nothing
+    interval: 1m
+    input_series:
+      - series: 'traces_span_metrics_calls_total{cluster="sre-lab-eks", cloud="aws", service_name="checkout", span_kind="SPAN_KIND_SERVER", status_code="STATUS_CODE_ERROR"}'
+        values: '0+5x15'
+      - series: 'traces_span_metrics_calls_total{cluster="sre-lab-eks", cloud="aws", service_name="payment", span_kind="SPAN_KIND_CLIENT", status_code="STATUS_CODE_ERROR"}'
+        values: '0+5x15'
+      - series: 'traces_span_metrics_calls_total{cluster="sre-lab-eks", cloud="aws", service_name="payment", span_kind="SPAN_KIND_SERVER", status_code="STATUS_CODE_UNSET"}'
+        values: '0+3x15'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: PaymentErrorRatioHigh
+        exp_alerts: []
+
+  - name: the alert waits one minute before it fires
+    interval: 1m
+    input_series:
+      - series: 'traces_span_metrics_calls_total{cluster="sre-lab-eks", cloud="aws", service_name="payment", span_kind="SPAN_KIND_SERVER", status_code="STATUS_CODE_ERROR"}'
+        values: '0 0 0 0 0 2 4 6 8 10 12'
+      - series: 'traces_span_metrics_calls_total{cluster="sre-lab-eks", cloud="aws", service_name="payment", span_kind="SPAN_KIND_SERVER", status_code="STATUS_CODE_UNSET"}'
+        values: '0+1x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: PaymentErrorRatioHigh
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: PaymentErrorRatioHigh
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              service: payment
+              cluster: sre-lab-eks
+              cloud: aws
+            exp_annotations:
+              summary: More than 5% of payment charges failed over the last 5 minutes.

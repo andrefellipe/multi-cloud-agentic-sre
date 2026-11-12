@@ -1,0 +1,27 @@
+# The root bundle of the GitRepo sre-lab-platform, which reads paths: [platform]
+# on main (tools/lab/configure_rancher.py). It deploys the plain manifests of
+# platform/base through the overlay for the cluster's cloud (REQ-022): today the
+# demo's base feature flags (REQ-023, BR8.5).
+#
+# Each subfolder with its own fleet.yaml is a separate bundle: otel-demo and
+# otel-collector. Fleet would still copy their files, and the alert rules and the
+# dashboard that Terraform reads, into this bundle, so .fleetignore leaves them
+# out. Only what the overlay builds is deployed.
+name: sre-lab-demo-flags
+
+# The demo's bundle waits for this one through this label (dependsOn).
+labels:
+  sre-lab/bundle: demo-flags
+
+defaultNamespace: otel-demo
+
+helm:
+  releaseName: sre-lab-demo-flags
+
+targetCustomizations:
+  - name: aws
+    clusterSelector:
+      matchLabels:
+        cloud: aws
+    kustomize:
+      dir: overlays/aws
