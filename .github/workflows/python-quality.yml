@@ -1,0 +1,89 @@
+# Python quality gate (REQ-150.1, REQ-151.1, REQ-112.1).
+#
+# Runs on every pull request, so its check always reports and can be required,
+# and on pushes to main, so the merged commit's package hashes are on record.
+# With no Python project yet, every step after the first is skipped.
+#
+# It runs PR code, so it has no cloud access and only reads the repository.
+# Actions are pinned by commit SHA (REQ-112.1).
+name: python-quality
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: python-quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  python-quality:
+    name: python-quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      # Every uv command fails rather than change uv.lock (REQ-112.1).
+      UV_LOCKED: "1"
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - name: Look for the Python project
+        id: project
+        run: |
+          if [ -f pyproject.toml ] && [ -f uv.lock ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No pyproject.toml and uv.lock yet, so the Python checks are skipped."
+          fi
+
+      - name: Install uv
+        if: steps.project.outputs.present == 'true'
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.7"
+          # SHA-256 of uv-x86_64-unknown-linux-gnu.tar.gz, from the 0.13.7 release.
+          checksum: "c5221ff41b7892bfc223543883600125f6a47fe845093e0f5bdff4f359196d83"
+          enable-cache: false
+
+      - name: Install the locked environment
+        if: steps.project.outputs.present == 'true'
+        run: uv sync --locked
+
+      - name: Ruff lint and format check
+        if: steps.project.outputs.present == 'true'
+        run: make lint
+
+      - name: mypy, strict, with the Pydantic plugin
+        if: steps.project.outputs.present == 'true'
+        run: make typecheck
+
+      - name: Tests, with the 80% line coverage floor
+        if: steps.project.outputs.present == 'true'
+        run: make coverage
+
+      - name: Every listed REQ ID is cited by a test (REQ-151.1)
+        if: steps.project.outputs.present == 'true'
+        run: |
+          # One list per unit: tests/<unit>/req-ids.txt, checked against tests/<unit>.
+          for list in tests/*/req-ids.txt; do
+            if [ -f "$list" ]; then
+              uv run python tools/ci/check_req_citations.py --requirements "$list" "$(dirname "$list")"
+            fi
+          done
+
+      - name: Build the packages and print their hashes (nothing is uploaded)
+        if: steps.project.outputs.present == 'true'
+        run: make package

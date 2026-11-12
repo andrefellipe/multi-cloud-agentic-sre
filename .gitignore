@@ -22,6 +22,10 @@ __pycache__/
 .venv/
 .pytest_cache/
 .ruff_cache/
+.coverage
+
+# Package output of `make package` (root only: tools/build/ is source)
+/build/
 
 # Node
 node_modules/
