@@ -28,6 +28,7 @@ CREATING_PATHS = {
     "/v3/users",
     "/v3/roletemplates",
     "/v3/globalrolebindings",
+    "/v1/management.cattle.io.globalrolebindings",
     "/v3/clusters",
     "/v3/clusterroletemplatebindings",
     "/v3/clusterregistrationtokens",
@@ -75,7 +76,7 @@ def test_req_022_second_run_creates_nothing_and_only_rotates_the_token(
     assert run(configure_rancher, lab_aws, rancher, clock) == 0
 
     assert counts == {
-        "users": 2,
+        "users": 3,
         "roletemplates": 1,
         "globalrolebindings": 2,
         "clusters": 1,
@@ -259,11 +260,65 @@ def test_req_021_cognito_sign_in_needs_mfa_and_admits_only_the_operator(
     assert config["issuer"] == f"https://cognito-idp.us-east-1.amazonaws.com/{lab_aws.user_pool_id}"
     assert config["rancherUrl"] == "https://rancher.example.com/verify-auth"
     assert config["pkceMethod"] == "S256"
+    operators = [uid for uid, u in rancher.users.items() if principal in u.get("principalIds", [])]
+    assert len(operators) == 1
     admins = [g for g in rancher.globalrolebindings.values() if g["globalRoleId"] == "admin"]
-    assert [g.get("userPrincipalId") for g in admins] == [principal]
+    assert [(g.get("userPrincipalId"), g.get("userId")) for g in admins] == [
+        (principal, operators[0])
+    ]
+    assert ("POST", "/v1/management.cattle.io.globalrolebindings") in rancher.calls
     assert rancher.passwords["admin"] == lab_aws.admin_password
     assert rancher.users["user-admin"]["mustChangePassword"] is False
     assert rancher.settings["server-url"] == "https://rancher.example.com"
+
+
+def test_req_021_operator_who_already_signed_in_is_made_admin_without_a_second_user(
+    configure_rancher: ModuleType, lab_aws: Any, rancher: Any, clock: tuple[Any, Any]
+) -> None:
+    """REQ-021.1: an operator who signed in once before the script ran keeps one user.
+
+    Rancher created that user at the first sign-in, as a standard user. The
+    script binds the admin role to the same principal, so Rancher binds it to
+    that user and creates no second one.
+    """
+    principal = f"cognito_user://{lab_aws.operator_sub}"
+    rancher.users["u-operator"] = {
+        "id": "u-operator",
+        "type": "user",
+        "principalIds": [principal, "local://u-operator"],
+        "enabled": True,
+    }
+
+    assert run(configure_rancher, lab_aws, rancher, clock) == 0
+
+    assert [uid for uid, u in rancher.users.items() if principal in u.get("principalIds", [])] == [
+        "u-operator"
+    ]
+    admins = [g for g in rancher.globalrolebindings.values() if g["globalRoleId"] == "admin"]
+    assert [g.get("userId") for g in admins] == ["u-operator"]
+
+
+def test_req_021_v3_refusal_of_the_admin_binding_stops_the_run(
+    configure_rancher: ModuleType,
+    lab_aws: Any,
+    rancher: Any,
+    clock: tuple[Any, Any],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """REQ-021.1: when Rancher refuses the admin binding, the script stops and says why.
+
+    Nothing after the binding runs: no agent user, no cluster record, no token.
+    """
+    rancher.refuse_global_role_bindings = True
+
+    assert run(configure_rancher, lab_aws, rancher, clock) == 1
+
+    err = capsys.readouterr().err
+    assert "POST /v1/management.cattle.io.globalrolebindings failed: HTTP 422" in err
+    assert "Nothing after this step ran" in err
+    assert not [u for u in rancher.users.values() if u.get("username") == "sre-agent"]
+    assert not rancher.clusters
+    assert lab_aws.secret_value(AGENT_CREDENTIAL) is None
 
 
 def test_rancher_that_never_answers_fails_without_any_write(

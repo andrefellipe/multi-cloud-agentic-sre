@@ -73,6 +73,7 @@ AGENT_READ_RULES: tuple[JSON, ...] = (
 )
 LOGIN_ONLY_GLOBAL_ROLE = "user-base"
 FLEET_WORKSPACE = "fleet-default"
+GLOBAL_ROLE_BINDINGS = "/v1/management.cattle.io.globalrolebindings"
 AGENT_CREDENTIAL_DESCRIPTION = "sre-agent read token, issued by tools/lab/configure_rancher.py"
 MILLISECONDS_PER_DAY = 86_400_000
 
@@ -467,10 +468,30 @@ def ensure_cognito_sign_in(
 
 
 def ensure_operator_is_admin(api: RancherAPI, principal_id: str, console: Console) -> None:
-    query = {"globalRoleId": "admin", "userPrincipalId": principal_id}
-    if not _items(api.get("/v3/globalrolebindings", query)):
-        api.post("/v3/globalrolebindings", {"type": "globalRoleBinding", **query})
-        console.say("Sign-in: the operator identity is a Rancher admin.")
+    """Make the operator's Cognito identity a Rancher admin, before its first sign-in.
+
+    Rancher's v3 API binds a global role only to an existing user or to a group,
+    and the operator has no Rancher user until it signs in. A binding created
+    through Rancher's Kubernetes API (/v1) may name the user principal instead:
+    Rancher then creates the user for that principal and binds the role to it
+    (Rancher 2.15, GlobalRoleBinding.userPrincipalName).
+    """
+    for binding in _items(api.get(GLOBAL_ROLE_BINDINGS)):
+        if (
+            binding.get("globalRoleName") == "admin"
+            and binding.get("userPrincipalName") == principal_id
+        ):
+            return
+    api.post(
+        GLOBAL_ROLE_BINDINGS,
+        {
+            "type": "management.cattle.io.globalrolebinding",
+            "metadata": {"generateName": "grb-"},
+            "globalRoleName": "admin",
+            "userPrincipalName": principal_id,
+        },
+    )
+    console.say("Sign-in: the operator identity is a Rancher admin.")
 
 
 def _rule_set(rules: object) -> set[tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]]:
