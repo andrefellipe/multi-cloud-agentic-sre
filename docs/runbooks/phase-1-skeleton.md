@@ -17,17 +17,43 @@ You need these once.
 | Terraform 1.17.x, the AWS CLI, the Session Manager plugin, kubectl, uv, the GitHub CLI | `brew install hashicorp/tap/terraform awscli kubectl uv gh`, then `brew install --cask session-manager-plugin` | Each root requires Terraform `~> 1.17.1`, as CI uses 1.17.1. Step 4 opens a shell on the Rancher host through Session Manager. Step 2 stores CI's role with `gh`, signed in with `gh auth login` |
 | The coding agent refused the Cognito client secret, before you apply `permanent` | IAM Identity Center, Permission sets, `SreLabReadOnly`, inline policy: add `cognito-idp:DescribeUserPoolClient` to its deny statement, then update the provisioned account | `ReadOnlyAccess` allows `cognito-idp:Describe*`, and `DescribeUserPoolClient` returns the Rancher app client's secret (REQ-013.1) |
 
-The four parameters **(you)**. Type the values in your shell; do not save them in a file. Re-run a command with `--overwrite` to change a value, for example when your public address changes.
+The four parameters **(you)**. Keep the values in your shell only; do not save them in a file.
 
-```bash
-aws ssm put-parameter --type String --name /sre-lab/domain-name --value "$DOMAIN"
-aws ssm put-parameter --type String --name /sre-lab/allowlist-cidrs --value "$MY_IP/32"
-aws ssm put-parameter --type String --name /sre-lab/cognito-user-email --value "$EMAIL"
-aws ssm put-parameter --type String --name /sre-lab/idc-user-id --value "$IDC_USER_ID"
-```
+1. Your domain. Paste this line on its own, press Enter, then type the domain and press Enter:
+
+   ```bash
+   read -r DOMAIN
+   ```
+
+2. The email address for your Rancher sign-in, the same way:
+
+   ```bash
+   read -r EMAIL
+   ```
+
+3. Look up your public address and your IAM Identity Center user ID, so neither is copied by hand. The ID comes from the name you signed in with. The last line must print `36`:
+
+   ```bash
+   MY_IP=$(curl -s https://checkip.amazonaws.com)
+   STORE=$(aws sso-admin list-instances --query 'Instances[0].IdentityStoreId' --output text)
+   ME=$(aws sts get-caller-identity --query Arn --output text | awk -F/ '{print $NF}')
+   IDC_USER_ID=$(aws identitystore get-user-id --identity-store-id "$STORE" --alternate-identifier "{\"UniqueAttribute\":{\"AttributePath\":\"userName\",\"AttributeValue\":\"$ME\"}}" --query UserId --output text)
+   echo "${#IDC_USER_ID}"
+   ```
+
+4. Store the four values:
+
+   ```bash
+   aws ssm put-parameter --type String --name /sre-lab/domain-name --value "$DOMAIN"
+   aws ssm put-parameter --type String --name /sre-lab/allowlist-cidrs --value "$MY_IP/32"
+   aws ssm put-parameter --type String --name /sre-lab/cognito-user-email --value "$EMAIL"
+   aws ssm put-parameter --type String --name /sre-lab/idc-user-id --value "$IDC_USER_ID"
+   ```
+
+To change a value later, for example when your public address changes, run its command again with `--overwrite`.
 
 - `allowlist-cidrs` takes one or more IPv4 CIDRs, comma-separated, each `/16` or narrower. A plan stops on anything else, including `0.0.0.0/0`.
-- `idc-user-id` is your user ID in IAM Identity Center (Users, your user, General information, User ID). It makes you the Grafana admin.
+- `idc-user-id` makes you the Grafana admin. With a wrong ID, applying `permanent` stops at `aws_grafana_role_association.admin` with `404: Failed to associate identity`. Set it again with step 3 and `--overwrite`, then plan and apply again.
 - All four stay sensitive in every plan, including the plan CI posts on the public pull request.
 
 Fleet reads `platform/` from the public repository over HTTPS, so no deploy key is needed (ADR-0005).
@@ -132,7 +158,7 @@ kubectl apply -f https://rancher.<your domain>/v3/import/<token>.yaml
 
 The second command carries the cluster's registration token. Treat it like a password: run it, and never paste it into a chat, an issue or a pull request.
 
-The script waits for the cluster to turn active, points Fleet at `platform/` on `main`, and writes the agent's 30-day token to `sre-lab/rancher-agent-token`. Apart from that registration command, it never prints a password or a token.
+The script waits until Rancher reports the cluster Ready. Then it points Fleet at `platform/` on `main`, writes the agent's 30-day token to `sre-lab/rancher-agent-token`, and checks that the stored token signs in. Apart from that registration command, it never prints a password or a token. If you ever need the registration command again, Rancher shows it on the cluster's Registration tab in Cluster Management.
 
 ### 6. Sign in to Rancher
 
