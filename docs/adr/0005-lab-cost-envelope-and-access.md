@@ -1,6 +1,6 @@
 # ADR-0005: The lab's cost envelope, and how Rancher is reached
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Requirements: REQ-130 (REQ-130.1), REQ-021 (REQ-021.1), REQ-022, REQ-024, REQ-152 (REQ-152.1), REQ-013 (REQ-013.1)
 
@@ -64,4 +64,4 @@ Two facts changed after the plan was approved:
 
 ## AI involvement
 
-Claude, in the developer role of AI-DLC Code Generation for u1's first feature PR, drafted this ADR from the Infrastructure Design answers (Q1 to Q4) and from your decisions since the plan: the repository is public, Fleet needs no deploy key, and the domain is a fourth SSM parameter. Claude checked the versions and Rancher's source for the Cognito client secret. The alternatives above are the options you rejected in Infrastructure Design, plus the deploy key the plan had and you dropped. Review it, change what you disagree with, and set the status to Accepted in the pull request.
+Claude, in the developer role of AI-DLC Code Generation for u1's first feature PR, drafted this ADR from the Infrastructure Design answers (Q1 to Q4) and from your decisions since the plan: the repository is public, Fleet needs no deploy key, and the domain is a fourth SSM parameter. Claude checked the versions and Rancher's source for the Cognito client secret. The alternatives above are the options you rejected in Infrastructure Design, plus the deploy key the plan had and you dropped. You accepted it unchanged after pull request #6 merged.
