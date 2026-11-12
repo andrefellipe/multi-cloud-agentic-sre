@@ -130,7 +130,7 @@ run "permanent_matches_the_design" {
     condition = toset(one([
       for condition in data.aws_iam_policy_document.ci_plan_trust.statement[0].condition :
       condition.values if condition.variable == "token.actions.githubusercontent.com:sub"
-    ])) == toset(["repo:andrefellipe/multi-cloud-agentic-sre:pull_request", "repo:andrefellipe/multi-cloud-agentic-sre:ref:refs/heads/main"])
+    ])) == toset(["repo:andrefellipe@36719048/multi-cloud-agentic-sre@1452188891:pull_request", "repo:andrefellipe@36719048/multi-cloud-agentic-sre@1452188891:ref:refs/heads/main"])
     error_message = "The CI plan role trusts only this repository's pull requests and main."
   }
 
@@ -155,6 +155,27 @@ run "permanent_matches_the_design" {
     error_message = "The CI plan role must be refused S3 buckets of other accounts."
   }
 
+  assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.ci_plan.statement :
+      statement.sid == "DenySecretValues" && statement.effect == "Deny" && statement.resources == toset(["*"])
+      && statement.actions == toset(["secretsmanager:GetSecretValue", "secretsmanager:BatchGetSecretValue"])
+    ])
+    error_message = "The CI plan role must be refused every secret value."
+  }
+
+  # Decryption only through IAM Identity Center, which reading the Grafana admin needs.
+  assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.ci_plan.statement :
+      statement.sid == "DenyDecryptOutsideIdentityCenter" && statement.effect == "Deny"
+      && statement.actions == toset(["kms:Decrypt"]) && statement.resources == toset(["*"])
+      && one(statement.condition).test == "StringNotLike" && one(statement.condition).variable == "kms:ViaService"
+      && one(statement.condition).values == tolist(["sso.*.amazonaws.com"])
+    ])
+    error_message = "The CI plan role may decrypt only through IAM Identity Center."
+  }
+
   # Managed Grafana, signing in through IAM Identity Center, with you as admin.
   assert {
     condition     = aws_grafana_workspace.sre_lab.authentication_providers == tolist(["AWS_SSO"]) && aws_grafana_workspace.sre_lab.grafana_version == "13.2"
@@ -171,6 +192,19 @@ run "permanent_matches_the_design" {
     condition     = aws_xray_trace_segment_destination.cloudwatch_logs.destination == "CloudWatchLogs"
     error_message = "Trace segments must go to CloudWatch Logs (Transaction Search)."
   }
+}
+
+# REQ-152.1: the CI role trusts this repository only by GitHub's IDs. A subject
+# with names alone, which a re-created repository of the same name would match,
+# is refused.
+run "the_ci_role_refuses_a_subject_without_ids" {
+  command = plan
+
+  variables {
+    github_oidc_subject_prefix = "repo:andrefellipe/multi-cloud-agentic-sre"
+  }
+
+  expect_failures = [var.github_oidc_subject_prefix]
 }
 
 run "one_validation_record_proves_the_certificate" {
