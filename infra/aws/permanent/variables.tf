@@ -1,11 +1,16 @@
-variable "github_repository" {
-  description = "The GitHub repository, as owner/name, whose pull requests and main branch may assume the CI plan role (REQ-152.1)."
+# GitHub's OIDC tokens for this repository name the account and the repository
+# by their IDs as well as their names (GitHub's immutable subject). Trusting the
+# IDs means a deleted and re-created account or repository of the same name
+# cannot assume the CI plan role. Read the prefix with:
+#   gh api repos/<owner>/<name>/actions/oidc/customization/sub --jq .sub_claim_prefix
+variable "github_oidc_subject_prefix" {
+  description = "The subject prefix of this repository's GitHub OIDC tokens, repo:<owner>@<owner ID>/<name>@<repository ID>. Its pull requests and main branch may assume the CI plan role (REQ-152.1)."
   type        = string
-  default     = "andrefellipe/multi-cloud-agentic-sre"
+  default     = "repo:andrefellipe@36719048/multi-cloud-agentic-sre@1452188891"
 
   validation {
-    condition     = can(regex("^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$", var.github_repository))
-    error_message = "Give the repository as owner/name."
+    condition     = can(regex("^repo:[A-Za-z0-9-]+@[0-9]+/[A-Za-z0-9._-]+@[0-9]+$", var.github_oidc_subject_prefix))
+    error_message = "Give GitHub's immutable subject prefix, repo:<owner>@<owner ID>/<name>@<repository ID>, as the gh api command above prints it."
   }
 }
 
