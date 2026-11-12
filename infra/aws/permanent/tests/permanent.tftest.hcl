@@ -155,6 +155,27 @@ run "permanent_matches_the_design" {
     error_message = "The CI plan role must be refused S3 buckets of other accounts."
   }
 
+  assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.ci_plan.statement :
+      statement.sid == "DenySecretValues" && statement.effect == "Deny" && statement.resources == toset(["*"])
+      && statement.actions == toset(["secretsmanager:GetSecretValue", "secretsmanager:BatchGetSecretValue"])
+    ])
+    error_message = "The CI plan role must be refused every secret value."
+  }
+
+  # Decryption only through IAM Identity Center, which reading the Grafana admin needs.
+  assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.ci_plan.statement :
+      statement.sid == "DenyDecryptOutsideIdentityCenter" && statement.effect == "Deny"
+      && statement.actions == toset(["kms:Decrypt"]) && statement.resources == toset(["*"])
+      && one(statement.condition).test == "StringNotLike" && one(statement.condition).variable == "kms:ViaService"
+      && one(statement.condition).values == tolist(["sso.*.amazonaws.com"])
+    ])
+    error_message = "The CI plan role may decrypt only through IAM Identity Center."
+  }
+
   # Managed Grafana, signing in through IAM Identity Center, with you as admin.
   assert {
     condition     = aws_grafana_workspace.sre_lab.authentication_providers == tolist(["AWS_SSO"]) && aws_grafana_workspace.sre_lab.grafana_version == "13.2"

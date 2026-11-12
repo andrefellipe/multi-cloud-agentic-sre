@@ -82,9 +82,27 @@ data "aws_iam_policy_document" "ci_plan" {
     actions = [
       "secretsmanager:GetSecretValue",
       "secretsmanager:BatchGetSecretValue",
-      "kms:Decrypt",
     ]
     resources = ["*"]
+  }
+
+  # No decryption either, except what IAM Identity Center does on the role's
+  # behalf. Identity Center's data is encrypted with your own KMS key, and
+  # reading the Grafana admin (aws_grafana_role_association) makes Identity
+  # Center decrypt it, as the caller. Direct calls, Secrets Manager, SSM
+  # SecureString parameters and every other service stay refused: the negated
+  # operator also holds when kms:ViaService is absent.
+  statement {
+    sid       = "DenyDecryptOutsideIdentityCenter"
+    effect    = "Deny"
+    actions   = ["kms:Decrypt"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringNotLike"
+      variable = "kms:ViaService"
+      values   = ["sso.*.amazonaws.com"]
+    }
   }
 }
 
