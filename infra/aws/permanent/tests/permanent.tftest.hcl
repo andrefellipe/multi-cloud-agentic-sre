@@ -61,6 +61,12 @@ mock_provider "aws" {
       arn = "arn:aws:logs:us-east-1:123456789012:log-group:mock"
     }
   }
+
+  mock_resource "aws_grafana_workspace" {
+    defaults = {
+      arn = "arn:aws:grafana:us-east-1:123456789012:/workspaces/g-0000000000"
+    }
+  }
 }
 
 override_data {
@@ -160,12 +166,19 @@ run "permanent_matches_the_design" {
     error_message = "The CI plan role is read-only."
   }
 
+  # Beyond ReadOnlyAccess, the role may write the state lock files and list the
+  # Grafana service accounts, nothing else. That list's resource is known only
+  # at apply, so the run alert_path_and_telemetry_match_the_design checks it.
   assert {
     condition = alltrue([
       for statement in data.aws_iam_policy_document.ci_plan.statement :
-      statement.effect == "Deny" || statement.resources == toset(["arn:aws:s3:::multi-cloud-agentic-sre-tfstate/*.tflock"])
+      statement.effect == "Deny" ? true : (
+        statement.sid == "ListGrafanaServiceAccounts"
+        ? statement.actions == toset(["grafana:ListWorkspaceServiceAccounts"])
+        : statement.resources == toset(["arn:aws:s3:::multi-cloud-agentic-sre-tfstate/*.tflock"])
+      )
     ])
-    error_message = "The CI plan role's only write is the state lock files."
+    error_message = "The CI plan role's only write is the state lock files, and its only other grant is listing the Grafana service accounts."
   }
 
   assert {
@@ -343,5 +356,17 @@ run "alert_path_and_telemetry_match_the_design" {
   assert {
     condition     = aws_grafana_workspace_service_account.dashboards.grafana_role == "ADMIN" && aws_grafana_workspace_service_account.dashboards.name == "terraform-dashboards"
     error_message = "The dashboards service account needs the Admin role for its data sources."
+  }
+
+  # REQ-152.1: CI's plan refreshes that service account by listing the workspace's
+  # service accounts, which the CI plan role may do for this workspace only.
+  assert {
+    condition = anytrue([
+      for statement in data.aws_iam_policy_document.ci_plan.statement :
+      statement.sid == "ListGrafanaServiceAccounts" && statement.effect != "Deny"
+      && statement.actions == toset(["grafana:ListWorkspaceServiceAccounts"])
+      && statement.resources == toset(["arn:aws:grafana:us-east-1:123456789012:/workspaces/g-0000000000"])
+    ])
+    error_message = "The CI plan role may list the service accounts of the sre-lab Grafana workspace only."
   }
 }
