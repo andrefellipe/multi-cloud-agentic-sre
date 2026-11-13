@@ -1,0 +1,83 @@
+{
+  "id": 26915581,
+  "name": "main",
+  "target": "branch",
+  "source_type": "Repository",
+  "source": "andrefellipe/multi-cloud-agentic-sre",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "exclude": [],
+      "include": [
+        "~DEFAULT_BRANCH"
+      ]
+    }
+  },
+  "rules": [
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": false,
+        "required_reviewers": [],
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": false,
+        "require_extra_approval_for_unattributed_changes": true,
+        "allowed_merge_methods": [
+          "merge",
+          "squash",
+          "rebase"
+        ]
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": false,
+        "do_not_enforce_on_create": false,
+        "required_status_checks": [
+          {
+            "context": "pr-evidence",
+            "integration_id": 15368
+          },
+          {
+            "context": "python-quality",
+            "integration_id": 15368
+          },
+          {
+            "context": "terraform-fmt-validate",
+            "integration_id": 15368
+          },
+          {
+            "context": "terraform-plan",
+            "integration_id": 15368
+          },
+          {
+            "context": "platform-render",
+            "integration_id": 15368
+          }
+        ]
+      }
+    }
+  ],
+  "node_id": "RRS_lACqUmVwb3NpdG9yec5WjqTbzgGasv0",
+  "created_at": "2026-11-10T01:12:44.771-03:00",
+  "updated_at": "2026-11-11T22:41:42.004-03:00",
+  "bypass_actors": [],
+  "current_user_can_bypass": "never",
+  "_links": {
+    "self": {
+      "href": "https://api.github.com/repos/andrefellipe/multi-cloud-agentic-sre/rulesets/26915581"
+    },
+    "html": {
+      "href": "https://github.com/andrefellipe/multi-cloud-agentic-sre/rules/26915581"
+    }
+  }
+}
