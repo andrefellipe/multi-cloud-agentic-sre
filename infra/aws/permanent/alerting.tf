@@ -1,6 +1,6 @@
 # The alert path up to the intake: the rule group for the demo fault, the alert
 # manager, and the lab topic (LC1) it publishes to (REQ-030, BR8.7, contract C1).
-# The intake function and its subscription arrive with the next pull request.
+# The intake function and its subscription to the topic are in intake.tf.
 
 # The lab topic. Only this workspace's alert manager may publish to it, and only
 # over TLS (SD-2, REQ-030.1). Not encrypted at rest: alert labels are not secret,

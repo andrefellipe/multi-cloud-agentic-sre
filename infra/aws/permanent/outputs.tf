@@ -75,3 +75,35 @@ output "grafana_dashboards_service_account_id" {
   description = "The Grafana service account infra/aws/dashboards applies with."
   value       = aws_grafana_workspace_service_account.dashboards.service_account_id
 }
+
+output "incident_table_name" {
+  description = "The incident table (LC3)."
+  value       = aws_dynamodb_table.incidents.name
+}
+
+output "dead_letter_queue_url" {
+  description = "The dead-letter queue (LC8), for the check after each demo; its URL carries the account ID."
+  value       = aws_sqs_queue.dead_letters.url
+  sensitive   = true
+}
+
+output "session_start_queue_url" {
+  description = "The session-start queue (LC4); its URL carries the account ID."
+  value       = aws_sqs_queue.session_starts.url
+  sensitive   = true
+}
+
+output "intake_function_name" {
+  description = "The intake function (LC2), which the replay tool invokes."
+  value       = aws_lambda_function.intake.function_name
+}
+
+output "notifier_function_name" {
+  description = "The notifier function (LC9)."
+  value       = aws_lambda_function.notifier.function_name
+}
+
+output "functions_package" {
+  description = "The package `make package` must have built under build/lambda/ before an apply: named after the hash of its sources."
+  value       = basename(local.functions_package)
+}

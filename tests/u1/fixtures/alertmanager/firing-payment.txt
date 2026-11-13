@@ -1,0 +1,7 @@
+{ "receiver": "lab-topic", "status": "firing", "alerts": [
+  { "status": "firing",
+    "labels": {"alertname": "PaymentErrorRatioHigh", "cloud": "aws", "cluster": "sre-lab-eks", "service": "payment", "severity": "critical"},
+    "startsAt": "2026-11-12T23:32:04.587Z",
+    "endsAt": "0001-01-01T00:00:00Z",
+    "fingerprint": "a3f9c2e17b4d6085" }
+] }

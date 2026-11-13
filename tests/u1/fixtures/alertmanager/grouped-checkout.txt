@@ -1,0 +1,17 @@
+{ "receiver": "lab-topic", "status": "firing", "alerts": [
+  { "status": "firing",
+    "labels": {"alertname": "CheckoutLatencyHigh", "cloud": "aws", "cluster": "sre-lab-eks", "pod": "checkout-7c9d8b6f5-2xk4p", "service": "checkout", "severity": "warning"},
+    "startsAt": "2026-11-12T23:40:10.001Z",
+    "endsAt": "0001-01-01T00:00:00Z",
+    "fingerprint": "0c5e8a91d2b7f436" },
+  { "status": "firing",
+    "labels": {"alertname": "CheckoutLatencyHigh", "cloud": "aws", "cluster": "sre-lab-eks", "pod": "checkout-7c9d8b6f5-9qz7m", "service": "checkout", "severity": "critical"},
+    "startsAt": "2026-11-12T23:40:12.250Z",
+    "endsAt": "0001-01-01T00:00:00Z",
+    "fingerprint": "5b71e0f3c9a8d264" },
+  { "status": "firing",
+    "labels": {"alertname": "CheckoutLatencyHigh", "cloud": "aws", "cluster": "sre-lab-eks", "pod": "checkout-7c9d8b6f5-ld8rn", "service": "checkout", "severity": "warning"},
+    "startsAt": "2026-11-12T23:40:09.730Z",
+    "endsAt": "0001-01-01T00:00:00Z",
+    "fingerprint": "e94d27a6b0c35f18" }
+] }

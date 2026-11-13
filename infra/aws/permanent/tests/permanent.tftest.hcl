@@ -67,6 +67,68 @@ mock_provider "aws" {
       arn = "arn:aws:grafana:us-east-1:123456789012:/workspaces/g-0000000000"
     }
   }
+
+  mock_resource "aws_dynamodb_table" {
+    defaults = {
+      arn = "arn:aws:dynamodb:us-east-1:123456789012:table/sre-lab-incidents"
+    }
+  }
+
+  mock_resource "aws_lambda_function" {
+    defaults = {
+      arn           = "arn:aws:lambda:us-east-1:123456789012:function:mock"
+      qualified_arn = "arn:aws:lambda:us-east-1:123456789012:function:mock:$LATEST"
+      invoke_arn    = "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:123456789012:function:mock/invocations"
+    }
+  }
+}
+
+# The incident pipeline's resources, each with its own ARN, so that the
+# assertions below can tell which one a reference points to.
+override_resource {
+  target = aws_sqs_queue.dead_letters
+  values = {
+    id  = "https://sqs.us-east-1.amazonaws.com/123456789012/sre-lab-dead-letters"
+    url = "https://sqs.us-east-1.amazonaws.com/123456789012/sre-lab-dead-letters"
+    arn = "arn:aws:sqs:us-east-1:123456789012:sre-lab-dead-letters"
+  }
+}
+
+override_resource {
+  target = aws_sqs_queue.session_starts
+  values = {
+    id  = "https://sqs.us-east-1.amazonaws.com/123456789012/sre-lab-session-starts"
+    url = "https://sqs.us-east-1.amazonaws.com/123456789012/sre-lab-session-starts"
+    arn = "arn:aws:sqs:us-east-1:123456789012:sre-lab-session-starts"
+  }
+}
+
+override_resource {
+  target = aws_sns_topic.ops_alarms
+  values = {
+    arn = "arn:aws:sns:us-east-1:123456789012:sre-lab-ops-alarms"
+  }
+}
+
+override_resource {
+  target = aws_iam_role.intake
+  values = {
+    arn = "arn:aws:iam::123456789012:role/sre-lab-intake"
+  }
+}
+
+override_resource {
+  target = aws_lambda_function.intake
+  values = {
+    arn = "arn:aws:lambda:us-east-1:123456789012:function:sre-lab-intake"
+  }
+}
+
+override_resource {
+  target = aws_lambda_function.notifier
+  values = {
+    arn = "arn:aws:lambda:us-east-1:123456789012:function:sre-lab-notifier"
+  }
 }
 
 override_data {
@@ -368,5 +430,217 @@ run "alert_path_and_telemetry_match_the_design" {
       && statement.resources == toset(["arn:aws:grafana:us-east-1:123456789012:/workspaces/g-0000000000"])
     ])
     error_message = "The CI plan role may list the service accounts of the sre-lab Grafana workspace only."
+  }
+}
+
+# The incident pipeline: table, queues, intake, notifier and alarms (u1 PR 3).
+run "incident_pipeline_matches_the_design" {
+  command = apply
+
+  # REQ-140.3, SC-2: one on-demand table keyed by pk, protected, with expiring inbound events.
+  assert {
+    condition = (
+      aws_dynamodb_table.incidents.billing_mode == "PAY_PER_REQUEST"
+      && aws_dynamodb_table.incidents.hash_key == "pk"
+      && aws_dynamodb_table.incidents.deletion_protection_enabled
+      && one(aws_dynamodb_table.incidents.point_in_time_recovery).enabled
+      && one(aws_dynamodb_table.incidents.point_in_time_recovery).recovery_period_in_days == 35
+      && one(aws_dynamodb_table.incidents.ttl).attribute_name == "expires_at_epoch"
+      && one(aws_dynamodb_table.incidents.ttl).enabled
+    )
+    error_message = "The incident table must be on demand, keyed by pk, deletion-protected, with 35 days of recovery and the event TTL."
+  }
+
+  # REQ-140.2, SC-3: dead letters kept 14 days; session starts retried 3 times, then dead-lettered.
+  assert {
+    condition = (
+      aws_sqs_queue.dead_letters.message_retention_seconds == 1209600
+      && aws_sqs_queue.dead_letters.sqs_managed_sse_enabled
+      && aws_sqs_queue.session_starts.visibility_timeout_seconds == 30
+      && aws_sqs_queue.session_starts.message_retention_seconds == 86400
+      && aws_sqs_queue.session_starts.sqs_managed_sse_enabled
+      && jsondecode(aws_sqs_queue.session_starts.redrive_policy) == {
+        deadLetterTargetArn = "arn:aws:sqs:us-east-1:123456789012:sre-lab-dead-letters"
+        maxReceiveCount     = 3
+      }
+      && jsondecode(aws_sqs_queue_redrive_allow_policy.dead_letters.redrive_allow_policy).sourceQueueArns == ["arn:aws:sqs:us-east-1:123456789012:sre-lab-session-starts"]
+    )
+    error_message = "The queues must follow SC-3: 14 days for dead letters, 30 s visibility and 3 receives for session starts."
+  }
+
+  # SD-2, REQ-103.3: each queue takes sends from the intake's role and refuses any request without TLS.
+  assert {
+    condition = alltrue([
+      for document in values(data.aws_iam_policy_document.queue) : (
+        one([for s in document.statement : one(s.principals).identifiers if s.sid == "IntakeSends"]) == toset(["arn:aws:iam::123456789012:role/sre-lab-intake"])
+        && one([for s in document.statement : one(s.condition).values if s.sid == "DenyWithoutTls"]) == tolist(["false"])
+      )
+    ])
+    error_message = "Each queue's policy must allow the intake's sends and deny requests without TLS."
+  }
+
+  # PD-3, SC-1: Python 3.13 on arm64, the sizes of PD-3, no reserved concurrency yet.
+  assert {
+    condition = (
+      aws_lambda_function.intake.handler == "agents.intake.handler.handler"
+      && aws_lambda_function.intake.memory_size == 512 && aws_lambda_function.intake.timeout == 60
+      && aws_lambda_function.notifier.handler == "agents.notifier.handler.handler"
+      && aws_lambda_function.notifier.memory_size == 256 && aws_lambda_function.notifier.timeout == 30
+      && alltrue([
+        for function in [aws_lambda_function.intake, aws_lambda_function.notifier] :
+        function.runtime == "python3.13" && function.architectures == tolist(["arm64"]) && coalesce(function.reserved_concurrent_executions, -1) == -1
+      ])
+    )
+    error_message = "The functions must match PD-3 and leave reserved concurrency unset until the quota increase."
+  }
+
+  # Both functions run from the package named after the hash of its sources, which CI computes without a package.
+  assert {
+    condition = (
+      length(aws_lambda_function.intake.source_code_hash) == 64
+      && aws_lambda_function.notifier.source_code_hash == aws_lambda_function.intake.source_code_hash
+      && aws_lambda_function.notifier.filename == aws_lambda_function.intake.filename
+      && endswith(aws_lambda_function.intake.filename, "/build/lambda/functions-${aws_lambda_function.intake.source_code_hash}.zip")
+      && output.functions_package == "functions-${aws_lambda_function.intake.source_code_hash}.zip"
+    )
+    error_message = "The functions must use the package named after their sources' hash."
+  }
+
+  # RD-1, SC-1: 2 platform retries, 10 minutes at most, then the dead-letter queue; the notifier retries nothing.
+  assert {
+    condition = (
+      aws_lambda_function_event_invoke_config.intake.maximum_retry_attempts == 2
+      && aws_lambda_function_event_invoke_config.intake.maximum_event_age_in_seconds == 600
+      && one(one(aws_lambda_function_event_invoke_config.intake.destination_config).on_failure).destination == "arn:aws:sqs:us-east-1:123456789012:sre-lab-dead-letters"
+      && aws_lambda_function_event_invoke_config.notifier.maximum_retry_attempts == 0
+      && length(aws_lambda_function_event_invoke_config.notifier.destination_config) == 0
+    )
+    error_message = "The intake's failures must reach the dead-letter queue after 2 retries; the notifier must not retry."
+  }
+
+  # REQ-030.1, SD-2: the lab topic runs the intake, the operations topic runs the notifier, and nothing else may.
+  assert {
+    condition = (
+      aws_sns_topic_subscription.intake.protocol == "lambda"
+      && aws_sns_topic_subscription.intake.topic_arn == "arn:aws:sns:us-east-1:123456789012:sre-lab-alerts"
+      && aws_sns_topic_subscription.intake.endpoint == "arn:aws:lambda:us-east-1:123456789012:function:sre-lab-intake"
+      && aws_lambda_permission.intake_from_lab_topic.principal == "sns.amazonaws.com"
+      && aws_lambda_permission.intake_from_lab_topic.source_arn == "arn:aws:sns:us-east-1:123456789012:sre-lab-alerts"
+      && aws_sns_topic_subscription.notifier.topic_arn == "arn:aws:sns:us-east-1:123456789012:sre-lab-ops-alarms"
+      && aws_sns_topic_subscription.notifier.endpoint == "arn:aws:lambda:us-east-1:123456789012:function:sre-lab-notifier"
+      && aws_lambda_permission.notifier_from_ops_alarms.source_arn == "arn:aws:sns:us-east-1:123456789012:sre-lab-ops-alarms"
+    )
+    error_message = "Each function must be subscribed to its topic, and invocable by that topic only."
+  }
+
+  assert {
+    condition = aws_lambda_function.intake.environment[0].variables == tomap({
+      LAB_TOPIC_ARN           = "arn:aws:sns:us-east-1:123456789012:sre-lab-alerts"
+      INCIDENT_TABLE_NAME     = "sre-lab-incidents"
+      SESSION_START_QUEUE_URL = "https://sqs.us-east-1.amazonaws.com/123456789012/sre-lab-session-starts"
+      DEAD_LETTER_QUEUE_URL   = "https://sqs.us-east-1.amazonaws.com/123456789012/sre-lab-dead-letters"
+    })
+    error_message = "The intake must be wired to the lab topic, the table and the two queues."
+  }
+
+  # SD-1, REQ-102.1: the intake reads and updates the incident table and sends to the two queues, nothing else.
+  assert {
+    condition = (
+      { for s in data.aws_iam_policy_document.intake.statement : s.sid => s.actions } == {
+        IncidentTable                   = toset(["dynamodb:GetItem", "dynamodb:UpdateItem"])
+        SessionStartAndDeadLetterQueues = toset(["sqs:SendMessage"])
+        OwnLogs                         = toset(["logs:CreateLogStream", "logs:PutLogEvents"])
+      }
+      && one([for s in data.aws_iam_policy_document.intake.statement : s.resources if s.sid == "IncidentTable"]) == toset(["arn:aws:dynamodb:us-east-1:123456789012:table/sre-lab-incidents"])
+      && one([for s in data.aws_iam_policy_document.intake.statement : s.resources if s.sid == "SessionStartAndDeadLetterQueues"]) == toset(["arn:aws:sqs:us-east-1:123456789012:sre-lab-session-starts", "arn:aws:sqs:us-east-1:123456789012:sre-lab-dead-letters"])
+    )
+    error_message = "The intake's role must follow SD-1: GetItem and UpdateItem on the table, SendMessage on the two queues."
+  }
+
+  # REQ-102.1: no write action on a wildcard resource in either function's role.
+  assert {
+    condition = alltrue(flatten([
+      for document in [data.aws_iam_policy_document.intake, data.aws_iam_policy_document.notifier] : [
+        for s in document.statement :
+        !contains(s.resources, "*") || alltrue([for action in s.actions : can(regex("^[a-z0-9-]+:(Get|List|Describe)", action))])
+      ]
+    ]))
+    error_message = "No write action may have a * resource (REQ-102.1)."
+  }
+
+  # REQ-103.1, BR6.4: the notifier may read the Slack secret's value, named by its ARN pattern, and only that secret.
+  assert {
+    condition = (
+      one([for s in data.aws_iam_policy_document.notifier.statement : s.resources if s.sid == "SlackWebhookSecret"]) == toset(["arn:aws:secretsmanager:us-east-1:123456789012:secret:sre-lab/slack-webhook-url-??????"])
+      && one([for s in data.aws_iam_policy_document.notifier.statement : s.actions if s.sid == "SlackWebhookSecret"]) == toset(["secretsmanager:GetSecretValue"])
+      && aws_lambda_function.notifier.environment[0].variables["SLACK_WEBHOOK_SECRET_ID"] == "sre-lab/slack-webhook-url"
+      && aws_lambda_function.notifier.environment[0].variables["DEAD_LETTER_ALARM_NAME"] == aws_cloudwatch_metric_alarm.dead_letters_waiting.alarm_name
+    )
+    error_message = "The notifier must name the Slack secret only, and read its value at send time."
+  }
+
+  # SD-2: only this account's CloudWatch alarms publish to the operations topic, over TLS.
+  assert {
+    condition = (
+      one(data.aws_iam_policy_document.ops_alarms.statement[0].principals).identifiers == toset(["cloudwatch.amazonaws.com"])
+      && {
+        for condition in data.aws_iam_policy_document.ops_alarms.statement[0].condition :
+        condition.variable => toset(condition.values)
+        } == {
+        "aws:SourceArn"     = toset(["arn:aws:cloudwatch:us-east-1:123456789012:alarm:*"])
+        "aws:SourceAccount" = toset(["123456789012"])
+      }
+      && data.aws_iam_policy_document.ops_alarms.statement[1].effect == "Deny"
+    )
+    error_message = "The operations topic must take publishes from this account's alarms only, over TLS."
+  }
+
+  # OD-4, REQ-140.2: one visible dead letter for a minute raises the alarm that runs the notifier.
+  assert {
+    condition = (
+      aws_cloudwatch_metric_alarm.dead_letters_waiting.namespace == "AWS/SQS"
+      && aws_cloudwatch_metric_alarm.dead_letters_waiting.metric_name == "ApproximateNumberOfMessagesVisible"
+      && aws_cloudwatch_metric_alarm.dead_letters_waiting.dimensions == tomap({ QueueName = "sre-lab-dead-letters" })
+      && aws_cloudwatch_metric_alarm.dead_letters_waiting.period == 60
+      && aws_cloudwatch_metric_alarm.dead_letters_waiting.evaluation_periods == 1
+      && aws_cloudwatch_metric_alarm.dead_letters_waiting.threshold == 1
+      && aws_cloudwatch_metric_alarm.dead_letters_waiting.comparison_operator == "GreaterThanOrEqualToThreshold"
+      && aws_cloudwatch_metric_alarm.dead_letters_waiting.treat_missing_data == "notBreaching"
+      && aws_cloudwatch_metric_alarm.dead_letters_waiting.alarm_actions == toset(["arn:aws:sns:us-east-1:123456789012:sre-lab-ops-alarms"])
+    )
+    error_message = "The dead-letter alarm must follow OD-4 and publish to the operations topic."
+  }
+
+  # OD-4, REQ-140.4: the other alarms are CloudWatch only in Phase 1, on any occurrence in 5 minutes.
+  assert {
+    condition = (
+      {
+        for alarm in aws_cloudwatch_metric_alarm.pipeline : alarm.metric_name => alarm.dimensions["component"]
+        } == {
+        IntakeErrors         = "intake"
+        LedgerWriteFailures  = "ledger"
+        NoticeFailures       = "notifier"
+        AlertToRecordSeconds = "intake"
+      }
+      && aws_cloudwatch_metric_alarm.pipeline["slow-record"].threshold == 60
+      && aws_cloudwatch_metric_alarm.pipeline["slow-record"].comparison_operator == "GreaterThanThreshold"
+      && alltrue([
+        for alarm in concat(values(aws_cloudwatch_metric_alarm.pipeline), values(aws_cloudwatch_metric_alarm.throttles)) :
+        length(coalesce(alarm.alarm_actions, toset([]))) == 0 && alarm.period == 300 && alarm.treat_missing_data == "notBreaching"
+      ])
+      && toset([for alarm in aws_cloudwatch_metric_alarm.throttles : alarm.dimensions["FunctionName"]]) == toset(["sre-lab-intake", "sre-lab-notifier"])
+    )
+    error_message = "The pipeline and throttle alarms must follow OD-4: no action in Phase 1, 5-minute periods."
+  }
+
+  # OD-2: the functions' log groups keep 14 days.
+  assert {
+    condition = (
+      aws_cloudwatch_log_group.intake.name == "/aws/lambda/sre-lab-intake"
+      && aws_cloudwatch_log_group.notifier.name == "/aws/lambda/sre-lab-notifier"
+      && aws_cloudwatch_log_group.intake.retention_in_days == 14
+      && aws_cloudwatch_log_group.notifier.retention_in_days == 14
+    )
+    error_message = "The functions' log groups must keep 14 days."
   }
 }

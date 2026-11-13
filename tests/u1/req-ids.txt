@@ -22,3 +22,25 @@ REQ-103.1
 # are checked outside pytest, so they are not listed: REQ-023, REQ-024, REQ-030
 # and REQ-130.2 by terraform test (infra/aws/permanent, lab and dashboards) and
 # promtool test rules (platform/alerts/tests/), REQ-112.1 by the pin check.
+
+# PR 3 (feat/REQ-030-intake-ledger): tests/u1/contracts/, ledger/, intake/,
+# notifier/, tools_lab/ (the replay tool) and tools_build/. The Terraform of the
+# pipeline in infra/aws/permanent (REQ-140.3, REQ-102.1, REQ-103.3, REQ-140.4)
+# is checked by its terraform test file, which this list does not read.
+REQ-030
+REQ-030.1
+REQ-031
+REQ-032
+REQ-033
+REQ-035
+REQ-103.2
+REQ-120.3
+REQ-120.5
+REQ-120.6
+REQ-121
+REQ-121.1
+REQ-140
+REQ-140.1
+REQ-140.2
+REQ-141
+REQ-141.1
