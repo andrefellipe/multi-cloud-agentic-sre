@@ -1,9 +1,10 @@
 # The CI plan role (LC14): GitHub Actions assumes it through OIDC, so no cloud key
 # is stored in GitHub (REQ-152.1, SD-10). Only this repository's pull requests and
 # its main branch may assume it, named by GitHub's IDs as well as by name
-# (var.github_oidc_subject_prefix). It can read the account and write nothing but
-# the state lock files; it is refused secret values and any S3 bucket that another
-# account owns, which matters because the state bucket's name is public.
+# (var.github_oidc_subject_prefix). It can read the account, plus the one read that
+# ReadOnlyAccess lacks for this root, and write nothing but the state lock files;
+# it is refused secret values and any S3 bucket that another account owns, which
+# matters because the state bucket's name is public.
 # After the first apply, store the role's ARN as the repository secret
 # AWS_PLAN_ROLE_ARN (docs/runbooks/phase-1-skeleton.md).
 
@@ -57,6 +58,16 @@ data "aws_iam_policy_document" "ci_plan" {
     sid       = "StateLockFilesOnly"
     actions   = ["s3:PutObject", "s3:DeleteObject"]
     resources = ["arn:${local.partition}:s3:::${var.state_bucket_name}/*.tflock"]
+  }
+
+  # Managed Grafana has no call that reads one service account: the plan
+  # refreshes the dashboards' service account (grafana.tf) by listing them all,
+  # and ReadOnlyAccess does not grant that list. It returns each account's name,
+  # ID and role, never a token, and only for this workspace.
+  statement {
+    sid       = "ListGrafanaServiceAccounts"
+    actions   = ["grafana:ListWorkspaceServiceAccounts"]
+    resources = [aws_grafana_workspace.sre_lab.arn]
   }
 
   # A bucket of the same name in another account can never be read or written.
