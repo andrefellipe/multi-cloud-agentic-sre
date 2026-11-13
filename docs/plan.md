@@ -72,7 +72,7 @@ A fixed graph of specialist agents handles each incident. A graph is easier to t
 | Verifier | After the merge, confirm Fleet synced and the alert cleared; if not, open one revert PR and escalate | Fleet status via Rancher, metrics, GitHub (revert PR only) | Small |
 | Scribe | Write the postmortem, update memory and the knowledge base, notify Slack | Memory, knowledge base, Slack | Small |
 
-**Models available to your account** (tested November 10, 2026): Claude Haiku 4.5 for the small tier, Sonnet 4.6 for the large tier, and Opus 4.6 for the Reviewer, through `us.` cross-region inference profiles. Sonnet 5 and newer need extra account-level access from AWS. Model IDs live in configuration, so switching later is a one-line change that the evals measure.
+**Models for your account:** Claude Haiku 4.5 for the small tier, Sonnet 4.6 for the large tier, and Opus 4.6 for the Reviewer, through the `us.` cross-region inference profiles `us.anthropic.claude-haiku-4-5-20251001-v1:0`, `us.anthropic.claude-sonnet-4-6` and `us.anthropic.claude-opus-4-6-v1`. A call to each on November 13, 2026 failed with "Error 002: Access to Bedrock models is not allowed for this account". That is a block on the whole account, which AWS Support has to lift, and a support case is open. Until it is lifted, nothing in the project can call a model. Sonnet 5 and newer need extra account-level access from AWS. Model IDs live in configuration, so switching later is a one-line change that the evals measure.
 
 **Design rules:**
 

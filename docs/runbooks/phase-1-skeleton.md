@@ -117,7 +117,7 @@ The VPC, EKS, the Rancher host, both load balancers and the DNS records.
 
    - no `aws_nat_gateway` anywhere (REQ-020, AC2.1.1);
    - `aws_eks_cluster.lab` on version `1.36`, with `upgrade_policy` `STANDARD`;
-   - no `*` resource on any write action in a policy (REQ-102.1, until u2 checks this in CI).
+   - no `*` resource on any write action in a policy (REQ-102.1, until u2 checks this in CI), with one accepted exception: the Collector's `xray:PutTraceSegments`. X-Ray grants that action on `*` only, so the policy limits it to `us-east-1` with `aws:RequestedRegion` instead.
 3. Apply it, and wait for `Apply complete!`. EKS takes about 15 minutes:
 
    ```bash
@@ -292,7 +292,12 @@ flagd reads `flagd-base-flags` in `otel-demo`. These commands use your EKS conte
 
 ### Checks at the end of PR 2
 
-**AC2.2.2: each bundle is Ready at the `main` commit.** In Rancher, Continuous Delivery, Git Repos, `sre-lab-platform` shows 3 of 3 bundle deployments ready, and its commit. Or, in a Session Manager shell on the Rancher host (step 4):
+**AC2.2.2: each bundle is Ready at the `main` commit.** In Rancher, Continuous Delivery:
+
+- Git Repos: `sre-lab-platform` shows `1/1` under Clusters Ready, and its commit.
+- Bundles: the three `sre-lab-*` bundles show Ready. A fourth bundle, `fleet-agent-…`, is Fleet's own agent and not part of this check.
+
+Or, in a Session Manager shell on the Rancher host (step 4):
 
 ```bash
 sudo k3s kubectl -n fleet-default get gitrepo sre-lab-platform -o jsonpath='{.status.commit}{" "}{.status.display.readyBundleDeployments}{"\n"}'
@@ -306,7 +311,7 @@ git fetch origin
 git rev-parse origin/main
 ```
 
-Passes when the GitRepo shows `3/3`, each of the three bundles shows `1/1`, and every commit shown equals `origin/main`.
+Passes when every commit shown equals `origin/main` and the three `sre-lab-*` bundles are ready: in Rancher, as above; in the shell, the GitRepo shows `3/3` and each of the three bundles shows `1/1`.
 
 **AC2.3.1: the running flags match Git.**
 
