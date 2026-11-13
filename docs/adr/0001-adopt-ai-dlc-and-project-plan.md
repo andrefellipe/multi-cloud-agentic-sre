@@ -1,6 +1,6 @@
 # ADR-0001: Adopt AI-DLC with Claude Code, on the project plan baseline
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-09
 - Requirements: n/a (precedes Inception)
 
@@ -28,4 +28,4 @@ The project needs a repeatable AI-assisted method that leaves proof it was follo
 
 ## AI involvement
 
-Drafted by Claude in a claude.ai planning session on 2026-11-09, together with this scaffold. Review it, change what you disagree with, and set the status to Accepted in a PR.
+Drafted by Claude in a claude.ai planning session on 2026-11-09, together with this scaffold. You accepted it unchanged on 2026-11-13.
