@@ -401,7 +401,7 @@ It prints every file's SHA-256, then three lines. The last one, `package: manife
 
    Read the plan before you apply it. It adds 29 resources and changes or destroys none. Check that:
    - both `aws_lambda_function` resources have a `filename` ending in the package name from step 11;
-   - neither sets `reserved_concurrent_executions`: until your quota increase, the account's limit of 10 Lambda executions is their shared cap (SC-1);
+   - both show `reserved_concurrent_executions = -1`, which means no reserved concurrency: until your quota increase, the account's limit of 10 Lambda executions is their shared cap (SC-1);
    - no write action has a `*` resource (REQ-102.1). The notifier's `cloudwatch:GetMetricData` on `*` is a read, and CloudWatch grants it on `*` only.
 2. Apply it, and wait for `Apply complete!`:
 
