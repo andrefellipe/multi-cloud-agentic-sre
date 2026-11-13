@@ -1,0 +1,22 @@
+{
+  "Records": [
+    {
+      "EventSource": "aws:sns",
+      "EventVersion": "1.0",
+      "EventSubscriptionArn": "arn:aws:sns:us-east-1:123456789012:sre-lab-alerts:4b1c7e52-0d3f-4a8e-9b61-2f5c8d9e7a10",
+      "Sns": {
+        "Type": "Notification",
+        "MessageId": "95df01b4-ee98-5cb9-9903-4c221d41eb5e",
+        "TopicArn": "arn:aws:sns:us-east-1:123456789012:sre-lab-alerts",
+        "Subject": "[FIRING:1]",
+        "Message": "replaced by the test",
+        "Timestamp": "2026-11-12T23:33:05.118Z",
+        "SignatureVersion": "1",
+        "Signature": "EXAMPLE-SIGNATURE",
+        "SigningCertUrl": "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-00000000000000000000000000000000.pem",
+        "UnsubscribeUrl": "https://sns.us-east-1.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=arn:aws:sns:us-east-1:123456789012:sre-lab-alerts:4b1c7e52-0d3f-4a8e-9b61-2f5c8d9e7a10",
+        "MessageAttributes": {}
+      }
+    }
+  ]
+}

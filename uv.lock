@@ -93,6 +93,19 @@ wheels = [
 ]
 
 [[package]]
+name = "aws-lambda-powertools"
+version = "3.40.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jmespath" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8f/fc/ffe1ce4bc265f0a20da5833e53069ee48e98d86e24a5dbdd1a8cb8548091/aws_lambda_powertools-3.40.0.tar.gz", hash = "sha256:ed51652dd5b38dc0943e76c4663997c709fe7bceef809d48c49ed7c902bfb47e", size = 840686, upload-time = "2026-11-10T11:20:44.806Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/16/bf/7c72a4ded895972089d41722ecfecc67c5f8ad3618f8a4637fae73087ffd/aws_lambda_powertools-3.40.0-py3-none-any.whl", hash = "sha256:0d701a323d406ac029071d81724b9c8f711a2cb7f4be05cb946acab49401159b", size = 1015679, upload-time = "2026-11-10T11:20:42.85Z" },
+]
+
+[[package]]
 name = "boto3"
 version = "1.44.1"
 source = { registry = "https://pypi.org/simple" }
@@ -120,14 +133,32 @@ wheels = [
 ]
 
 [package.optional-dependencies]
+cloudwatch = [
+    { name = "mypy-boto3-cloudwatch" },
+]
 cognito-idp = [
     { name = "mypy-boto3-cognito-idp" },
+]
+dynamodb = [
+    { name = "mypy-boto3-dynamodb" },
+]
+lambda = [
+    { name = "mypy-boto3-lambda" },
 ]
 secretsmanager = [
     { name = "mypy-boto3-secretsmanager" },
 ]
+sns = [
+    { name = "mypy-boto3-sns" },
+]
+sqs = [
+    { name = "mypy-boto3-sqs" },
+]
 ssm = [
     { name = "mypy-boto3-ssm" },
+]
+sts = [
+    { name = "mypy-boto3-sts" },
 ]
 
 [[package]]
@@ -562,6 +593,20 @@ wheels = [
 ]
 
 [[package]]
+name = "docker"
+version = "7.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pywin32", marker = "sys_platform == 'win32'" },
+    { name = "requests" },
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/88/7f/731ff914b0255d3d065f45fd4e626d4b8c95dbcbaada049f337a6ac16410/docker-7.2.0.tar.gz", hash = "sha256:cebb93773d334f778e023a7ee352a8d6e13ab1bd3b863a4d4a59dec897df43ac", size = 118731, upload-time = "2026-07-09T14:53:46.39Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/75/23/529140fe1aab80fc6992f93a706deec709140a6397439139a054e1515c45/docker-7.2.0-py3-none-any.whl", hash = "sha256:a3f45fdeb9165e2d25d9a1d02ddf3bc70fb572cf5ebbf9b58558c22caf29b71f", size = 148775, upload-time = "2026-07-09T14:53:45.224Z" },
+]
+
+[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -873,6 +918,10 @@ wheels = [
 cognitoidp = [
     { name = "joserfc" },
 ]
+dynamodb = [
+    { name = "docker" },
+    { name = "py-partiql-parser" },
+]
 ssm = [
     { name = "pyyaml" },
 ]
@@ -882,15 +931,17 @@ name = "multi-cloud-agentic-sre"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "aws-lambda-powertools" },
     { name = "boto3" },
     { name = "httpx" },
     { name = "pydantic" },
+    { name = "python-ulid" },
 ]
 
 [package.dev-dependencies]
 dev = [
-    { name = "boto3-stubs", extra = ["cognito-idp", "secretsmanager", "ssm"] },
-    { name = "moto", extra = ["cognitoidp", "ssm"] },
+    { name = "boto3-stubs", extra = ["cloudwatch", "cognito-idp", "dynamodb", "lambda", "secretsmanager", "sns", "sqs", "ssm", "sts"] },
+    { name = "moto", extra = ["cognitoidp", "dynamodb", "ssm"] },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -899,15 +950,17 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aws-lambda-powertools", specifier = ">=3" },
     { name = "boto3", specifier = ">=1.44.1" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "pydantic", specifier = ">=2.14.3" },
+    { name = "python-ulid", specifier = ">=3" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "boto3-stubs", extras = ["cognito-idp", "secretsmanager", "ssm"], specifier = ">=1.44.1" },
-    { name = "moto", extras = ["cognitoidp", "secretsmanager", "ssm"], specifier = ">=5.2.5" },
+    { name = "boto3-stubs", extras = ["cloudwatch", "cognito-idp", "dynamodb", "lambda", "secretsmanager", "sns", "sqs", "ssm", "sts"], specifier = ">=1.44.1" },
+    { name = "moto", extras = ["cloudwatch", "cognitoidp", "dynamodb", "secretsmanager", "sns", "sqs", "ssm", "sts"], specifier = ">=5.2.5" },
     { name = "mypy", specifier = ">=2.4.1" },
     { name = "pytest", specifier = ">=9.2.0" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
@@ -969,12 +1022,39 @@ wheels = [
 ]
 
 [[package]]
+name = "mypy-boto3-cloudwatch"
+version = "1.44.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/11/87/c2abcc3b5d117eabdf9af2735d875d9892ed09c36e829549595e9574729b/mypy_boto3_cloudwatch-1.44.2.tar.gz", hash = "sha256:0756d58755bc7d5ab7fccbd48efd08fb7731b681bd30ee7a08e4e065d225d071", size = 42651, upload-time = "2026-11-13T00:32:45.223Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/92/2d/315a2a172e9ebdb2556652a6030a2428d528a8fab4f2c447adc45a211282/mypy_boto3_cloudwatch-1.44.2-py3-none-any.whl", hash = "sha256:2b731d6d535dcf9a159177cf5807c94e457d19b82414c9f40c581ab3f2d27ada", size = 52283, upload-time = "2026-11-13T00:32:42.821Z" },
+]
+
+[[package]]
 name = "mypy-boto3-cognito-idp"
 version = "1.44.1"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f1/0c/42fd6715a881fceaad08e85d7d98155042cebf6dfa53d28f8ecef6254424/mypy_boto3_cognito_idp-1.44.1.tar.gz", hash = "sha256:755dad77e06540f1133abd06d35dc93a545db2679e17de744cd639f036bddc5c", size = 57762, upload-time = "2026-11-11T22:44:21.602Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8b/67/e47174a2b4a20d7ab504262725362cd609aac25b593760a0d94d2e84d9da/mypy_boto3_cognito_idp-1.44.1-py3-none-any.whl", hash = "sha256:252b0cb62c2632d704e95f15e56fc08ddf18405dee4a9d16300bb22e96d21400", size = 64078, upload-time = "2026-11-11T22:44:18.784Z" },
+]
+
+[[package]]
+name = "mypy-boto3-dynamodb"
+version = "1.44.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f4/51/6bc879b0859f46d3beffd98e0e98946a305e00b59980a9f844aec592f88e/mypy_boto3_dynamodb-1.44.0.tar.gz", hash = "sha256:3fd6198fa9eb698919c1cb666b3a9f314d2b6f2258c3921a84a2bef3d47f2dd9", size = 52899, upload-time = "2026-11-10T21:52:03.894Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c3/f9/a139e76e4d5acbceaf9294c40a2f1d39fefc1a8f1a83e0ac5d11a97b7b95/mypy_boto3_dynamodb-1.44.0-py3-none-any.whl", hash = "sha256:a9b2052552e9c9c0c0a1db7306628552d6f289e8772bb4d324e522d19255c4c9", size = 63500, upload-time = "2026-11-10T21:52:00.192Z" },
+]
+
+[[package]]
+name = "mypy-boto3-lambda"
+version = "1.44.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1e/fe/4f1045181b084d2c7a7b70307bf8cda2b4085a5d6a489c79bff4e312f527/mypy_boto3_lambda-1.44.0.tar.gz", hash = "sha256:5ef3af390496ff71398514addb0b1d6c3bfea37ae45c8884fcaa333a855c7409", size = 53526, upload-time = "2026-11-10T21:54:25.662Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3c/82/e4a4d9d69cb45aa895fc52ef347989207087ea24c3038e8dc90e647b89fe/mypy_boto3_lambda-1.44.0-py3-none-any.whl", hash = "sha256:a168b6131a37c4fc9d3b37433b858045964341c3b025305e2b5258533f27d521", size = 62013, upload-time = "2026-11-10T21:54:23.942Z" },
 ]
 
 [[package]]
@@ -987,12 +1067,39 @@ wheels = [
 ]
 
 [[package]]
+name = "mypy-boto3-sns"
+version = "1.44.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/60/cd/479d8cac0b6075ea0daeeaa6b27dc502b0fcf7013b6b54086ae327a6473f/mypy_boto3_sns-1.44.0.tar.gz", hash = "sha256:8737a1b7e7cc8df19f2f616292d2e7c8492ddd783e78aa2a7f8847b638f2e4bd", size = 32889, upload-time = "2026-11-10T21:58:35.365Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5a/c5/b42225c431ce368a2235d5eaf96d93d97428b03b80eb81cc055e6f64ca7d/mypy_boto3_sns-1.44.0-py3-none-any.whl", hash = "sha256:83300991ff56689d5c12248399efb7d921cd1e883f1cf479ae79cd65b164c5e2", size = 40149, upload-time = "2026-11-10T21:58:31.627Z" },
+]
+
+[[package]]
+name = "mypy-boto3-sqs"
+version = "1.44.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c1/ab/b4980ce6108fdc8f3a1ba5c870eddbcb250ba325aa06a42cc32a6aefeebf/mypy_boto3_sqs-1.44.0.tar.gz", hash = "sha256:8225fff746c9e69e5067d3aa9f1918b6ade07e5da9eac5f77f3f8f38fb5bb969", size = 23605, upload-time = "2026-11-10T21:58:34.485Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/82/79/6d97bfb301a231739068fe6fcf09f0d58205f43bda5792b45479a7e56a0f/mypy_boto3_sqs-1.44.0-py3-none-any.whl", hash = "sha256:a25966f8db3018b367fdb4f27a39b2abe674276f3272795959e50a15056e12f7", size = 33764, upload-time = "2026-11-10T21:58:32.247Z" },
+]
+
+[[package]]
 name = "mypy-boto3-ssm"
 version = "1.44.0"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ce/0b/dccb50bdb2b4376333b72da57bacc400a4b931138e89d0b4ad6c1dad5f04/mypy_boto3_ssm-1.44.0.tar.gz", hash = "sha256:cd9b9a36cdf2c2c02f72df3ec428636f483d481957569d7c7433bf2b2e45bcc2", size = 98696, upload-time = "2026-11-10T21:58:42.332Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/bf/56/d193d060fbb5c96cedb2599f7688e75e1d25477d89240d2a1e1057e04695/mypy_boto3_ssm-1.44.0-py3-none-any.whl", hash = "sha256:a5fab399850ae04b820e091456e3e77a6e47cf0b7460ea9d72c113636585dc57", size = 100314, upload-time = "2026-11-10T21:58:40.015Z" },
+]
+
+[[package]]
+name = "mypy-boto3-sts"
+version = "1.44.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e4/4b/e43939ab6078aa31d362ced9b22b6cee26856d8cebac5178928c605b85a2/mypy_boto3_sts-1.44.0.tar.gz", hash = "sha256:4828500c2c7b2c55c9c2aa5ad23997430db24a6c19a548e80a421e2d0533f67c", size = 16963, upload-time = "2026-11-10T21:58:54.743Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/77/f6/3a273e2202ab1c230ee1976b1f2379185383382070c6eb4056833be28bfa/mypy_boto3_sts-1.44.0-py3-none-any.whl", hash = "sha256:7fbcd7b4bd52c1069c3cde9702bd3a172ab3db7a3c8ffd27073b5e8ce1ca0b34", size = 21064, upload-time = "2026-11-10T21:58:51.177Z" },
 ]
 
 [[package]]
@@ -1029,6 +1136,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/bf/db/7fc19e6f2dc92a966727031389fc2e08b558f0f25eb7403c1119ad4713cd/pluggy-1.7.0.tar.gz", hash = "sha256:d1eaa46ebb595891b860ab086b4d09c8588af65ebd4361b8e8f4bb8920b90ba8", size = 123304, upload-time = "2026-10-15T09:50:58.343Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/40/9e/2b38731e0fc536806f16490e1a12d7f0dc2a1235aa8cc07bcc75416a7daa/pluggy-1.7.0-py3-none-any.whl", hash = "sha256:7dd7b0d8832ba3cb632c306926ded123429211b83641b35dc5c41ad2d34f9bec", size = 27082, upload-time = "2026-10-15T09:50:56.808Z" },
+]
+
+[[package]]
+name = "py-partiql-parser"
+version = "0.6.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/56/7a/a0f6bda783eb4df8e3dfd55973a1ac6d368a89178c300e1b5b91cd181e5e/py_partiql_parser-0.6.3.tar.gz", hash = "sha256:09cecf916ce6e3da2c050f0cb6106166de42c33d34a078ec2eb19377ea70389a", size = 17456, upload-time = "2025-10-18T13:56:13.441Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c9/33/a7cbfccc39056a5cf8126b7aab4c8bafbedd4f0ca68ae40ecb627a2d2cd3/py_partiql_parser-0.6.3-py2.py3-none-any.whl", hash = "sha256:deb0769c3346179d2f590dcbde556f708cdb929059fb654bad75f4cf6e07f582", size = 23752, upload-time = "2025-10-18T13:56:12.256Z" },
 ]
 
 [[package]]
@@ -1213,6 +1329,34 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/66/c0/0c8b6ad9f17a802ee498c46e004a0eb49bc148f2fd230864601a86dcf6db/python-dateutil-2.9.0.post0.tar.gz", hash = "sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3", size = 342432, upload-time = "2024-03-01T18:36:20.211Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ec/57/56b9bcc3c9c6a792fcbaf139543cee77261f3651ca9da0c93f5c1221264b/python_dateutil-2.9.0.post0-py2.py3-none-any.whl", hash = "sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427", size = 229892, upload-time = "2024-03-01T18:36:18.57Z" },
+]
+
+[[package]]
+name = "python-ulid"
+version = "4.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/50/a9/7d7e7e9a43c85c5d7efb44696c623612c5c0b87bdd9447292d0514a5bc59/python_ulid-4.1.0.tar.gz", hash = "sha256:7991ae0b139eed37fd843be81d561c56ec2c7544ef78262a401cd1a31bc41021", size = 111144, upload-time = "2026-10-27T13:01:30.774Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f2/08/68b321b85139f19cbca7b218c71a0a9889aea29bb9c12be7f5203fcbcff9/python_ulid-4.1.0-py3-none-any.whl", hash = "sha256:46992012f74638f286fcaff33904ba2510e51d9018b73af8c3f9b65014d52c1b", size = 14638, upload-time = "2026-10-27T13:01:29.811Z" },
+]
+
+[[package]]
+name = "pywin32"
+version = "312"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/83/ff/32aa7d2ed0ab12b323aaa64f9b75e6ad4f8fd09f9ccfc28c79414d46838d/pywin32-312-cp312-cp312-win32.whl", hash = "sha256:dab4f65ac9c4e48400a2a0530c46c3c579cd5905ecd11b80692373915269208b", size = 6371877, upload-time = "2026-06-04T07:49:28.836Z" },
+    { url = "https://files.pythonhosted.org/packages/03/d9/77040d3b43df3f3be32ea289433d660d2727f5ba327bc73be835127d9d60/pywin32-312-cp312-cp312-win_amd64.whl", hash = "sha256:b457f6d628a47e8a7346ce22acb7e1a46a4a78b52e1d17e1af56871bd19a93bc", size = 6914841, upload-time = "2026-06-04T07:49:31.85Z" },
+    { url = "https://files.pythonhosted.org/packages/e3/cc/7b1ec671775756020a0ee7f4feeaf3c568f0ab86bd3900088cf986937a92/pywin32-312-cp312-cp312-win_arm64.whl", hash = "sha256:6017c58e12f6809fbb0555b75df144c2922a9ffd18e4b9b5afa863b6c1a9d950", size = 6727901, upload-time = "2026-06-04T07:49:34.244Z" },
+    { url = "https://files.pythonhosted.org/packages/2d/41/12fbfd7f36ed2146d8bc9de96c2741296bf0d490b98508496cff322e274c/pywin32-312-cp313-cp313-win32.whl", hash = "sha256:7a27df850933d16a8eabfbaeb73d52b273e2da667f80d70b01a89d1f6828d02c", size = 6370184, upload-time = "2026-06-04T07:49:36.253Z" },
+    { url = "https://files.pythonhosted.org/packages/ba/db/36a78e3403099d31d9746d13fdcde5accc43c1155f375a34d15983a479a7/pywin32-312-cp313-cp313-win_amd64.whl", hash = "sha256:c53e878d15a1c44788082bfe712a905433473aa38f86375b7cf8b45e3acbaaf9", size = 6914298, upload-time = "2026-06-04T07:49:38.876Z" },
+    { url = "https://files.pythonhosted.org/packages/84/37/c1697194092b76de9ed47ca124323f02c57ffc8a45c06f88a3d5acaf01eb/pywin32-312-cp313-cp313-win_arm64.whl", hash = "sha256:59aba5d5940842075343a5ddc6b11f1cdf0d1567fe745290359dfbcc7c2eb831", size = 6727640, upload-time = "2026-06-04T07:49:41.083Z" },
+    { url = "https://files.pythonhosted.org/packages/fc/2b/1f3cded5822fd49c02f40544cbb5f58c7cfd6b1694869fd476cb6170ee97/pywin32-312-cp314-cp314-win32.whl", hash = "sha256:a77a90fbb6881238d2ca9c6fd797b25817f3768fe78d214a90137ff055a75f5b", size = 6468928, upload-time = "2026-06-04T07:49:43.188Z" },
+    { url = "https://files.pythonhosted.org/packages/21/82/3bf86d2e2808902013132e1ce905a7da0da53790f3836c64bf44d55e24f3/pywin32-312-cp314-cp314-win_amd64.whl", hash = "sha256:a4dd3a848290ef724347b19f301045831d8e802fa4464f491b98b1e0a081432e", size = 7024157, upload-time = "2026-06-04T07:49:45.34Z" },
+    { url = "https://files.pythonhosted.org/packages/a4/0e/73f6d6800b4f27655abd9e9f6aaeaefcddb2b946e4674efa2bab184a7f7b/pywin32-312-cp314-cp314-win_arm64.whl", hash = "sha256:9fce94568364e0155e6dfb781ac5d95903be8baf28670632beab1b523f300daa", size = 6839598, upload-time = "2026-06-04T07:49:47.613Z" },
+    { url = "https://files.pythonhosted.org/packages/eb/61/caa39686032d2ebdd04ff0ab5cbe163126c0066d98e00c9018646e42393b/pywin32-312-cp315-cp315-win32.whl", hash = "sha256:5c1fbe4a937a73ae9297384a3da38518cbc694c68ad8a809b2e19acd350f03ed", size = 6471159, upload-time = "2026-06-04T07:49:50.035Z" },
+    { url = "https://files.pythonhosted.org/packages/0f/cd/7e1de64a4a6f69c04214169657ccab0d93a670ea50e35eb8f489d7378249/pywin32-312-cp315-cp315-win_amd64.whl", hash = "sha256:c2f03a0f73f804a13c2735b99392b0cd426bb4f2c4d0178e5ac966a0f21618d5", size = 7025293, upload-time = "2026-06-04T07:49:54.857Z" },
+    { url = "https://files.pythonhosted.org/packages/23/ed/4532e9388e65fa16b46776ef47ad631a64eda1631884488af707666350ed/pywin32-312-cp315-cp315-win_arm64.whl", hash = "sha256:a8597d28f267b39074aef51fa593530082b39cbe5a074226096857b1fed2dfb9", size = 6840337, upload-time = "2026-06-04T07:49:57.531Z" },
 ]
 
 [[package]]

@@ -1,6 +1,6 @@
 # Phase 1 runbook: the walking skeleton
 
-This runbook covers unit u1 of Phase 1: the lab on AWS, a hardened Rancher, and later the alert path and the agent's first read. This version covers the first two feature PRs: `feat/REQ-020-lab-vpc-eks-rancher` (the lab and Rancher) and `feat/REQ-023-demo-telemetry-alerts` (the demo, its telemetry and its alert rule, in "PR 2" below). The skeleton demo, its verification and the burst test are added with the last u1 PR.
+This runbook covers unit u1 of Phase 1: the lab on AWS, a hardened Rancher, and later the alert path and the agent's first read. This version covers the first three feature PRs: `feat/REQ-020-lab-vpc-eks-rancher` (the lab and Rancher), `feat/REQ-023-demo-telemetry-alerts` (the demo, its telemetry and its alert rule, in "PR 2" below) and `feat/REQ-030-intake-ledger` (the alert intake, the incident ledger and the dead-letter notice, in "PR 3" below). The skeleton demo, its verification and the burst test are added with the last u1 PR.
 
 Every step marked **(you)** creates, changes or deletes something. Run it yourself, in your admin terminal with the admin profile (`AWS_PROFILE=sre-lab`), on an up-to-date `main`. Never start Claude Code in that terminal (REQ-014). Claude and CI use read-only roles and apply nothing.
 
@@ -368,16 +368,85 @@ Passes when the GitRepo shows `3/3`, each of the three bundles shows `1/1`, and 
    Nothing subscribes to the topic until PR 3, so the messages go no further. Put the flag back from Git, and check AC2.3.1 again.
 6. The dashboard (step 10) shows the demo's request rate, error rate and duration per service, with Cluster `sre-lab-eks` and Cloud `aws`. The pipeline panels stay empty until PR 3.
 
-## After each demo: the dead-letter check
+## PR 3: the alert intake, the incident ledger and the dead-letter notice
 
-Alerts that cannot be recorded wait in the dead-letter queue (LC8), which PR 3 adds. A notice reaches Slack only when the queue goes from empty to holding items, and only once (observability-design.md, OD-4), so after each demo run, check it yourself:
+`feat/REQ-030-intake-ledger` adds, all in `permanent`, so a lab teardown keeps them:
+
+- **The incident table** `sre-lab-incidents`, with deletion protection and 35 days of point-in-time recovery.
+- **Two queues**: `sre-lab-session-starts`, where the intake hands over session starts, and the dead-letter queue `sre-lab-dead-letters`, which keeps for 14 days whatever the intake could not finish.
+- **The intake function** `sre-lab-intake`, subscribed to the lab topic: each alert opens, or joins, the incident of its service.
+- **The notifier** `sre-lab-notifier`, run by the new operations alarm topic `sre-lab-ops-alarms`. When the dead-letter queue goes from empty to holding items, it posts one fixed notice to Slack, reading the webhook URL from `sre-lab/slack-webhook-url` at that moment.
+- **Alarms in CloudWatch**: dead letters waiting, which is the only one that notifies; intake errors; ledger write failures; notice failures; slow record; and throttling of either function.
+
+Nothing reads the session-start queue until the last u1 PR adds the session starter, so no session starts yet: requests wait there for a day, then expire.
+
+### 11. Build the functions' package (you)
+
+Both functions run from one package that you build on your machine. Its name carries the hash of the code it is built from, and `terraform apply` stops when the package of the commit you apply is not there.
 
 ```bash
-aws sqs get-queue-attributes --queue-url "$DEAD_LETTER_QUEUE_URL" \
-  --attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible
+uv sync --locked
+make package
 ```
 
-Both counts must be `0`. If not, find and fix the cause, then replay the items with `tools/lab/replay_dead_letters.py` (PR 3).
+It prints every file's SHA-256, then three lines. The last one, `package: manifest sha256 ...`, must equal the same line in the `python-quality` run of the merged commit: on GitHub, Actions, python-quality, the run for that commit on `main`, step "Build the packages and print their hashes".
+
+### 12. permanent, with PR 3 (you)
+
+1. Plan:
+
+   ```bash
+   terraform -chdir=infra/aws/permanent plan -out=permanent.tfplan
+   ```
+
+   Read the plan before you apply it. It adds 29 resources and changes or destroys none. Check that:
+   - both `aws_lambda_function` resources have a `filename` ending in the package name from step 11;
+   - neither sets `reserved_concurrent_executions`: until your quota increase, the account's limit of 10 Lambda executions is their shared cap (SC-1);
+   - no write action has a `*` resource (REQ-102.1). The notifier's `cloudwatch:GetMetricData` on `*` is a read, and CloudWatch grants it on `*` only.
+2. Apply it, and wait for `Apply complete!`:
+
+   ```bash
+   terraform -chdir=infra/aws/permanent apply permanent.tfplan
+   ```
+
+   If it stops with `no such file or directory` for `build/lambda/functions-...zip`, the package of this commit is not built: do step 11, then plan again.
+3. Only after `Apply complete!`, delete the plan file:
+
+   ```bash
+   rm infra/aws/permanent/permanent.tfplan
+   ```
+
+### Checks at the end of PR 3
+
+The duplicate, attach, below-threshold and dead-letter cases (AC2.6.2 to AC2.6.5) are proven by the tests with recorded messages, in `tests/u1/intake/` and `tests/u1/notifier/` (scenarios S2 to S9). The live check is AC2.6.1, with the demo fault, on a running lab:
+
+1. Set `paymentFailure` to `100%` ("Setting a demo flag out of band"). `PaymentErrorRatioHigh` fires within about ten minutes.
+2. List the incidents. This prints one line per incident: service, status, severity, `alert_fired` and `record_created`:
+
+   ```bash
+   aws dynamodb scan --table-name sre-lab-incidents --filter-expression "item_type = :t" --expression-attribute-values '{":t":{"S":"incident"}}' --query 'Items[].[service.S, status.S, severity.S, timestamps.M.alert_fired.S, timestamps.M.record_created.S]' --output text
+   ```
+
+   Passes with a `payment` line, `open` and `critical`, whose `record_created` is 60 seconds or less after its `alert_fired` (AC2.6.1).
+3. The dashboard's pipeline row shows the alert received, the incident created, and the alert-to-record time under its 60 s line.
+4. Put the flag back from Git, then do the dead-letter check below. Both counts `0` also confirm that the alert manager's real message has the shape the intake reads (assumption A-01): a message it could not read would be there, with reason `invalid_payload`.
+
+## After each demo: the dead-letter check
+
+Alerts that cannot be recorded wait in the dead-letter queue (LC8), which PR 3 adds. A notice reaches Slack only when the queue goes from empty to holding items, and only once (observability-design.md, OD-4), so after each demo run, check it yourself. The queue's URL carries your account ID, so it goes into a variable, not onto the screen:
+
+```bash
+DEAD_LETTER_QUEUE_URL=$(terraform -chdir=infra/aws/permanent output -raw dead_letter_queue_url)
+aws sqs get-queue-attributes --queue-url "$DEAD_LETTER_QUEUE_URL" --attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible --query Attributes
+```
+
+Both counts must be `0`. If not, find and fix the cause, then replay the items from the repository root:
+
+```bash
+uv run python -m tools.lab.replay_dead_letters
+```
+
+It prints one line per item: its shape, what it did, and the result, never the item's content. An alert goes back through the intake, where an alert already recorded changes nothing; a session start goes back to the session-start queue, unless its incident is finished or its session started, when it is dropped with that reason. Items it cannot replay stay in the queue, and the last line counts them. Running it again is safe.
 
 ## Teardown by hand, after each session (you)
 
@@ -387,7 +456,7 @@ Until u3 adds the teardown command and the nightly job, destroy the lab layer yo
 terraform -chdir=infra/aws/lab destroy
 ```
 
-- The permanent layer, the state bucket and your SSM parameters stay. So do, from PR 2, the Prometheus workspace and its history, the alert rule, the lab topic, the demo's logs and the dashboard.
+- The permanent layer, the state bucket and your SSM parameters stay. So do, from PR 2, the Prometheus workspace and its history, the alert rule, the lab topic, the demo's logs and the dashboard; and, from PR 3, the incident table, the two queues, the intake, the notifier and their alarms, which cost nothing while idle.
 - The two Rancher secrets are deleted at once, with no recovery window, so the next rebuild can create them again.
 - The Collector's role and its Pod Identity association go with the lab, and come back with the next rebuild.
 - Check that nothing billable is left:
@@ -411,6 +480,7 @@ To rebuild, repeat steps 3 to 6. Each rebuild takes the newest Ubuntu 24.04 imag
 | A Fleet bundle under `platform/` | A revert pull request; Fleet deploys the reverted `main` by itself |
 | A flag set out of band | Put the Git value back ("Setting a demo flag out of band") |
 | The dashboard or its data sources | A revert pull request; after it merges, repeat step 10 |
+| The intake, the notifier or their alarms (PR 3) | A revert pull request; after it merges, repeat steps 11 and 12. A revert that removes the incident table stops at its deletion protection, on purpose (REQ-140.3) |
 
 ## When something fails
 
@@ -423,6 +493,7 @@ To rebuild, repeat steps 3 to 6. Each rebuild takes the newest Ubuntu 24.04 imag
 - **The Collector logs 403 or 404 for `aps-workspaces`.** `platform/otel-collector/values-aws.yaml` still holds `SET-ME`, or another workspace's ID (step 8).
 - **The Collector logs 403 for `logs` or `xray`.** Compare its role, `sre-lab-otel-collector`, with `infra/aws/lab/collector.tf`, and check that CloudWatch Transaction Search is on (PR 1, `permanent`).
 - **No alert reaches the lab topic.** Look at the workspace's own log group, `/aws/vendedlogs/prometheus/sre-lab`: it records rule errors and failed publishes, a template error included.
+- **The alert fired but no incident appears.** Read the intake's log group, `/aws/lambda/sre-lab-intake`: each alert logs `alert applied` with its outcome, or `work dead-lettered` with its reason, and never the alert's content. Then do the dead-letter check.
 
 ## Versions pinned in PR 1
 

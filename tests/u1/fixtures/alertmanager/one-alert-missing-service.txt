@@ -1,0 +1,12 @@
+{ "receiver": "lab-topic", "status": "firing", "alerts": [
+  { "status": "firing",
+    "labels": {"alertname": "CartErrorRatioHigh", "cloud": "aws", "cluster": "sre-lab-eks", "severity": "warning"},
+    "startsAt": "2026-11-12T23:50:01.120Z",
+    "endsAt": "0001-01-01T00:00:00Z",
+    "fingerprint": "7d0b5e2f91c3a648" },
+  { "status": "firing",
+    "labels": {"alertname": "CartErrorRatioHigh", "cloud": "aws", "cluster": "sre-lab-eks", "service": "cart", "severity": "warning"},
+    "startsAt": "2026-11-12T23:50:02.440Z",
+    "endsAt": "0001-01-01T00:00:00Z",
+    "fingerprint": "c18e6f40b2d97a35" }
+] }

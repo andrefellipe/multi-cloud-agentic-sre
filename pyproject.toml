@@ -8,15 +8,17 @@ version = "0.1.0"
 description = "Open SRE agent system on AWS: alert intake, incident ledger and read-only agent sessions."
 requires-python = ">=3.12"
 dependencies = [
+    "aws-lambda-powertools>=3",
     "boto3>=1.44.1",
     "httpx>=0.28.1",
     "pydantic>=2.14.3",
+    "python-ulid>=3",
 ]
 
 [dependency-groups]
 dev = [
-    "boto3-stubs[cognito-idp,secretsmanager,ssm]>=1.44.1",
-    "moto[cognitoidp,secretsmanager,ssm]>=5.2.5",
+    "boto3-stubs[cloudwatch,cognito-idp,dynamodb,lambda,secretsmanager,sns,sqs,ssm,sts]>=1.44.1",
+    "moto[cloudwatch,cognitoidp,dynamodb,secretsmanager,sns,sqs,ssm,sts]>=5.2.5",
     "mypy>=2.4.1",
     "pytest>=9.2.0",
     "pytest-cov>=7.1.0",

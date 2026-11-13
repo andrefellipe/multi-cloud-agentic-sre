@@ -54,6 +54,12 @@ def put_secret_value() -> ModuleType:
     return load_script(LAB_TOOLS / "rancher_host" / "put_secret_value.py")
 
 
+@pytest.fixture(scope="session")
+def replay_dead_letters() -> ModuleType:
+    """tools/lab/replay_dead_letters.py."""
+    return load_script(LAB_TOOLS / "replay_dead_letters.py")
+
+
 @dataclass
 class FakeClock:
     """A clock whose sleep only moves time forward, so waits finish at once."""
