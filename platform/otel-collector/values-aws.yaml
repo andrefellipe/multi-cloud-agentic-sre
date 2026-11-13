@@ -21,7 +21,7 @@ extraEnvs:
   #   terraform -chdir=infra/aws/permanent output -raw prometheus_workspace_id
   # (docs/runbooks/phase-1-skeleton.md). A workspace ID is not a secret.
   - name: PROMETHEUS_WORKSPACE_ID
-    value: SET-ME
+    value: ws-a95d60c1-d67e-443c-b385-710a89625eb8
 
 alternateConfig:
   extensions:
