@@ -186,44 +186,54 @@ Record the result in ADR-0002. Had the spike failed, the fallback was a generic 
 
 The instance and the load balancer together cost about US$0.10 an hour while they run.
 
-## 7. Spike B: AKS to AWS without keys (1 session, cents)
+## 7. Spike B: AKS to AWS without keys (1 session, under a dollar)
 
 **Question:** can a pod in AKS assume an IAM role with its own service-account token, so the AKS collector needs no AWS keys?
 
-**(you)** Create a small AKS cluster with an OIDC issuer, and register the issuer in IAM:
+**Result (2026-11-14): yes.** ADR-0003 records the decision, and `docs/evidence/spike-b/` the run. The steps below are what ran.
+
+**(you)** Create a small AKS cluster with an OIDC issuer, and register the issuer in IAM. This subscription doesn't allow `Standard_B2s` in East US, and its B-series v2 and Dsv5 families have no vCPU quota, so the node is a `Standard_D2s_v6`. Check `az vm list-usage --location eastus` before you choose another size. Node SSH stays off, so no SSH key is generated. The cluster takes 5 to 10 minutes:
 
 ```bash
-az group create -n rg-sre-spike -l eastus
-az aks create -g rg-sre-spike -n aks-spike --tier free --node-count 1 \
-  --node-vm-size Standard_B2s --enable-oidc-issuer --generate-ssh-keys
-az aks get-credentials -g rg-sre-spike -n aks-spike
+export AWS_PROFILE=sre-lab AWS_REGION=us-east-1
+cd ~/Downloads/multi_cloud_agentic_SRE
+az group create -n rg-sre-spike -l eastus --query properties.provisioningState -o tsv
+az aks create -g rg-sre-spike -n aks-spike --tier free --node-count 1 --node-vm-size Standard_D2s_v6 --enable-oidc-issuer --ssh-access disabled --query provisioningState -o tsv
+az aks get-credentials -g rg-sre-spike -n aks-spike --overwrite-existing
 ISSUER=$(az aks show -g rg-sre-spike -n aks-spike --query oidcIssuerProfile.issuerUrl -o tsv)
-aws iam create-open-id-connect-provider --url "$ISSUER" --client-id-list sts.amazonaws.com
-aws iam list-open-id-connect-providers
+aws iam create-open-id-connect-provider --url "$ISSUER" --client-id-list sts.amazonaws.com --tags Key=Name,Value=aks-spike --query 'OpenIDConnectProviderArn' --output text | sed -E 's/[0-9]{12}/<account>/'
 ```
 
-**(you)** Create the role:
-
-1. Fill in the trust policy in a temporary copy, so no account details reach Git:
-   ```bash
-   PROVIDER_ARN="<the ARN that list-open-id-connect-providers printed>"
-   ISSUER_PATH="${PROVIDER_ARN#*oidc-provider/}"
-   sed -e "s|OIDC_PROVIDER_ARN|$PROVIDER_ARN|" -e "s|ISSUER_HOST_AND_PATH|$ISSUER_PATH|g" \
-     tools/spikes/spike-b-trust-policy.json > /tmp/spike-b-trust.json
-   ```
-2. Run `aws iam create-role --role-name aks-spike-otel --assume-role-policy-document file:///tmp/spike-b-trust.json`. It needs no permission policies, because `sts get-caller-identity` requires none.
-
-**(you)** Run the test pod, filling in your account ID on the fly so the tracked file stays unchanged:
+**(you)** Create the role and run the test pod. The trust policy and the pod are filled in on the fly from `tools/spikes/`, so no account or issuer details reach Git. The role needs no permission policies, because `sts get-caller-identity` requires none:
 
 ```bash
+export AWS_PROFILE=sre-lab AWS_REGION=us-east-1
+cd ~/Downloads/multi_cloud_agentic_SRE
+PROVIDER_ARN=$(aws iam list-open-id-connect-providers --query "OpenIDConnectProviderList[?contains(Arn, 'oic.prod-aks.azure.com')].Arn | [0]" --output text)
+ISSUER_PATH="${PROVIDER_ARN#*oidc-provider/}"
+sed -e "s|OIDC_PROVIDER_ARN|$PROVIDER_ARN|" -e "s|ISSUER_HOST_AND_PATH|$ISSUER_PATH|g" tools/spikes/spike-b-trust-policy.json > /tmp/spike-b-trust.json
+aws iam create-role --role-name aks-spike-otel --assume-role-policy-document file:///tmp/spike-b-trust.json --query 'Role.RoleName' --output text
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-sed "s/ACCOUNT_ID/$ACCOUNT_ID/" tools/spikes/spike-b-pod.yaml | kubectl apply -f -
-kubectl logs -n spike whoami
+sed "s/ACCOUNT_ID/$ACCOUNT_ID/" tools/spikes/spike-b-pod.yaml | kubectl --context aks-spike apply -f -
+kubectl --context aks-spike wait -n spike --for=jsonpath='{.status.phase}'=Succeeded pod/whoami --timeout=180s
+kubectl --context aks-spike logs -n spike whoami 2>&1 | grep -E '"Arn"|rror' | sed -E 's/[0-9]{12}/<account>/g'
 ```
 
-Pass: the log shows the `assumed-role/aks-spike-otel` ARN. If you get `InvalidIdentityToken`, compare the token's `iss` claim with the provider URL, including any trailing slash.
+Pass: the last line shows the `assumed-role/aks-spike-otel` ARN. IAM keeps the issuer's trailing `/` in the provider's URL and ARN, so the role's condition keys must keep it too, and deriving them from the ARN, as above, does. If you get `InvalidIdentityToken`, compare the token's `iss` claim with the provider URL.
 
-**(you)** Clean up with `az group delete -n rg-sre-spike --yes`, then delete the IAM role and the OIDC provider. Record the result in ADR-0003.
+**(you)** Tear down, in a block of its own, once the result is recorded. It deletes the resource group with the cluster, the role, the IAM provider and the cluster's entries in your kubeconfig:
+
+```bash
+export AWS_PROFILE=sre-lab AWS_REGION=us-east-1
+az group delete -n rg-sre-spike --yes
+aws iam delete-role --role-name aks-spike-otel
+PROVIDER_ARN=$(aws iam list-open-id-connect-providers --query "OpenIDConnectProviderList[?contains(Arn, 'oic.prod-aks.azure.com')].Arn | [0]" --output text)
+aws iam delete-open-id-connect-provider --open-id-connect-provider-arn "$PROVIDER_ARN"
+kubectl config delete-context aks-spike
+kubectl config delete-cluster aks-spike
+kubectl config delete-user clusterUser_rg-sre-spike_aks-spike
+rm -f /tmp/spike-b-trust.json
+```
 
 ## 8. Spike C: Claude Code telemetry (30 minutes)
 
