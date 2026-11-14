@@ -227,21 +227,23 @@ Pass: the log shows the `assumed-role/aks-spike-otel` ARN. If you get `InvalidId
 
 ## 8. Spike C: Claude Code telemetry (30 minutes)
 
+**Result (2026-11-14): passed.** `docs/evidence/telemetry/claude-code-2026-11-14.md` holds the metric names and values.
+
+Start the collector from the repository root. It is pinned by digest, listens only on this Mac, and runs in the background:
+
 ```bash
-docker run --rm -p 4317:4317 -p 4318:4318 \
-  -v "$PWD/tools/otel/collector-local.yaml:/etc/otelcol-contrib/config.yaml" \
-  otel/opentelemetry-collector-contrib:latest
+docker run -d --rm --name spike-c-collector -p 127.0.0.1:4317:4317 -p 127.0.0.1:4318:4318 -v "$PWD/tools/otel/collector-local.yaml:/etc/otelcol-contrib/config.yaml:ro" otel/opentelemetry-collector-contrib:0.165.0@sha256:e40d61f10c9a617cca1ffd1be4d7e2b3a4b0f0001798ff07e58cabe82e618cea
 ```
 
-In a second terminal:
+In a second terminal, start Claude Code outside the repository, so this project's AI-DLC hooks don't record the session. Type one prompt, wait about 15 seconds, then `/exit`:
 
 ```bash
-export CLAUDE_CODE_ENABLE_TELEMETRY=1 OTEL_METRICS_EXPORTER=otlp \
-  OTEL_EXPORTER_OTLP_PROTOCOL=grpc OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+cd /tmp
+export CLAUDE_CODE_ENABLE_TELEMETRY=1 OTEL_METRICS_EXPORTER=otlp OTEL_EXPORTER_OTLP_PROTOCOL=grpc OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 OTEL_METRIC_EXPORT_INTERVAL=10000
 claude
 ```
 
-Pass: within about a minute (the default export interval), the collector prints `claude_code.session.count`. Save a short excerpt with metric names and values only to `docs/evidence/telemetry/`. Pin the collector image to a version once it works. From Phase 1, the same variables point at the collector that writes to Managed Prometheus.
+Pass: `docker logs spike-c-collector` shows `claude_code.session.count`. The data points also carry your email, your account and organization IDs and the session ID, so save metric names and values only to `docs/evidence/telemetry/`. Then run `docker stop spike-c-collector`. From Phase 1, the same variables point at the collector that writes to Managed Prometheus, and that collector must drop or hash those identifiers first.
 
 ## 9. Close Phase 0 (by 2026-11-29)
 
