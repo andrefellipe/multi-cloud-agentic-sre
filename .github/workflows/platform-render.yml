@@ -2,7 +2,7 @@
 #
 # Runs on every pull request, so its check always reports and can be required.
 # It runs PR code with no cloud or cluster access. In order:
-#   1. ShellCheck on u1's shell scripts, and the pin check's own tests.
+#   1. ShellCheck on the repository's shell scripts, and the pin check's own tests.
 #   2. The pin check over the MCP configuration, platform/ and the workflows.
 #   3. kustomize build of the cloud=aws overlay, and helm template of each Fleet
 #      chart bundle with its values. Each skips while there is nothing to render.
@@ -35,9 +35,9 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: ShellCheck u1's shell scripts (REQ-150.1)
+      - name: ShellCheck the shell scripts (REQ-150.1)
         run: |
-          mapfile -t scripts < <(git ls-files -- 'tools/ci/*.sh' 'tools/lab/*.sh' 'tools/build/*.sh' 'tools/skeleton/*.sh')
+          mapfile -t scripts < <(git ls-files -- 'tools/ci/*.sh' 'tools/lab/*.sh' 'tools/build/*.sh' 'tools/skeleton/*.sh' 'tools/spikes/*.sh')
           if [ "${#scripts[@]}" -eq 0 ]; then
             echo "::notice::No shell scripts to check."
             exit 0

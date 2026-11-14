@@ -3,7 +3,7 @@
 # Source folders that do not exist yet are skipped, so every target works from
 # the first PR on. Unit-scoped commands are in each unit's unit-test-instructions.md.
 
-PYTHON_SOURCES := $(wildcard agents tools/ci tools/lab tools/build tools/skeleton)
+PYTHON_SOURCES := $(wildcard agents tools/ci tools/lab tools/build tools/skeleton tools/spikes)
 PYTHON_LINT_PATHS := $(PYTHON_SOURCES) $(wildcard tests)
 
 .PHONY: lint typecheck test-u1 coverage package
