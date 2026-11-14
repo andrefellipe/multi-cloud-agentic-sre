@@ -19,3 +19,5 @@ Setup, which you ran from the admin terminal (`docs/runbooks/phase-0.md`, sectio
 | The test pod's log | `"Arn": "arn:aws:sts::<account>:assumed-role/aks-spike-otel/botocore-session-…"` |
 
 The issuer URL carries tenant and cluster identifiers, so this record leaves it out, and shows the account ID as `<account>`.
+
+Teardown (2026-11-14): you ran the teardown block in runbook section 7. A read-only check afterwards found nothing left. In Azure: no `rg-sre-spike`, no AKS node resource group, no AKS cluster. In AWS: no role `aks-spike-otel` and no IAM OIDC provider for an AKS issuer. Your kubeconfig no longer has the cluster's context, cluster or user.
