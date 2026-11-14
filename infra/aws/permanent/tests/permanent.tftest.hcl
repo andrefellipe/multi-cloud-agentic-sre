@@ -479,19 +479,21 @@ run "incident_pipeline_matches_the_design" {
     error_message = "Each queue's policy must allow the intake's sends and deny requests without TLS."
   }
 
-  # PD-3, SC-1: Python 3.13 on arm64, the sizes of PD-3, no reserved concurrency yet.
+  # PD-3, SC-1, REQ-130.3: Python 3.13 on arm64, the sizes of PD-3, and the reserved caps.
   assert {
     condition = (
       aws_lambda_function.intake.handler == "agents.intake.handler.handler"
       && aws_lambda_function.intake.memory_size == 512 && aws_lambda_function.intake.timeout == 60
       && aws_lambda_function.notifier.handler == "agents.notifier.handler.handler"
       && aws_lambda_function.notifier.memory_size == 256 && aws_lambda_function.notifier.timeout == 30
+      && aws_lambda_function.intake.reserved_concurrent_executions == 10
+      && aws_lambda_function.notifier.reserved_concurrent_executions == 2
       && alltrue([
         for function in [aws_lambda_function.intake, aws_lambda_function.notifier] :
-        function.runtime == "python3.13" && function.architectures == tolist(["arm64"]) && coalesce(function.reserved_concurrent_executions, -1) == -1
+        function.runtime == "python3.13" && function.architectures == tolist(["arm64"])
       ])
     )
-    error_message = "The functions must match PD-3 and leave reserved concurrency unset until the quota increase."
+    error_message = "The functions must match PD-3 and reserve the caps of SC-1: 10 for the intake, 2 for the notifier."
   }
 
   # Both functions run from the package named after the hash of its sources, which CI computes without a package.

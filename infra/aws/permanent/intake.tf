@@ -56,6 +56,9 @@ resource "aws_lambda_function" "intake" {
   source_code_hash = local.package_source_hash
   memory_size      = 512
   timeout          = 60
+  # SC-1, REQ-130.3: at most 10 at once, so a storm cannot run up cost or
+  # overload the incident table; about 15 times the burst of REQ-120.5.
+  reserved_concurrent_executions = 10
 
   environment {
     variables = {
