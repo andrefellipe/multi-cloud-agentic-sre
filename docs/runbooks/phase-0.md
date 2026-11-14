@@ -134,58 +134,57 @@ Answer the stage questions. Use Request Changes when something is off, and Appro
 - Open the PR. In "AI involvement", say what you changed in AI-DLC's drafts.
 - Optional: a 30-minute review with a peer before you approve the requirements.
 
-## 6. Spike A: Rancher MCP on an EC2 instance (1 or 2 sessions, about US$1)
+## 6. Spike A: Rancher MCP through AgentCore Gateway (1 or 2 sessions, about US$2)
 
 **Question:** can an agent use `rancher-ai-mcp` with a read-only Rancher token, through AgentCore Gateway?
 
-Everything runs on one temporary x86 EC2 instance, so nothing depends on your Mac's ARM chip. Keep it running only while you work on the spike.
+**Result (2026-11-14): yes, privately.** ADR-0002 records the decision, and `docs/evidence/spike-a/` the checks. The steps below are what ran. The scripts they name ran from the git-ignored `build/spike-a/` and land in a follow-up pull request under `tools/spikes/spike-a/`.
 
-**A1. Launch the instance (you).** In the EC2 console, region `us-east-1`, choose **Launch instance**:
+Everything runs on one temporary x86 EC2 instance, plus an internal load balancer and AgentCore resources for A5; A6 removes them all. Claude's AWS credentials stay read-only. You run every step that creates, changes or deletes something, from your admin terminal, and the passwords and the agent's token go only to your Keychain.
 
-1. **Name:** `rancher-spike`.
-2. **AMI:** Ubuntu Server 24.04 LTS, architecture **64-bit (x86)**.
-3. **Instance type:** `t3.large` (2 vCPU, 8 GiB), enough for single-node Rancher.
-4. **Key pair:** create one named `rancher-spike` (ED25519, `.pem`), save it to `~/.ssh/`, then run `chmod 400 ~/.ssh/rancher-spike.pem`.
-5. **Network settings:** allow SSH and HTTPS from **My IP** only.
-6. **Storage:** 30 GiB gp3.
-7. **Advanced details, User data:** paste this script, which installs Docker and starts Rancher:
-   ```bash
-   #!/bin/bash
-   apt-get update -y
-   apt-get install -y docker.io
-   systemctl enable --now docker
-   docker run -d --name rancher --restart=unless-stopped -p 80:80 -p 443:443 --privileged rancher/rancher:v2.15.0
-   ```
-8. **Launch instance**, then copy its **Public IPv4 address**.
+**A1. Launch the instance (you, AWS CLI).**
 
-**A2. Open Rancher** (about 5 minutes after launch). Get the bootstrap password:
+- us-east-1 had no default VPC, so A1 creates one. The account's only other VPC belongs to another project; don't use it.
+- A key pair, `rancher-spike` (ED25519), saved straight to `~/.ssh/rancher-spike.pem` with mode 400.
+- A security group, `rancher-spike`, that allows SSH and HTTPS from your current address (`/32`) only. The console's "Allow HTTPS traffic from the internet" box would open 443 to everyone.
+- A `t3.large` running Ubuntu Server 24.04 (the SSM parameter `/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id`), with 30 GiB of encrypted gp3 storage, IMDSv2 required, and the tag `Name=rancher-spike`. Its cloud-config user data installs Docker and runs `rancher/rancher:v2.15.3@sha256:3f3a50c6e49c1cf5b4673bef236e0f260f36055de4d073438e38c441dc97aa9b`, the version the lab runs, pinned by digest.
 
-```bash
-ssh -i ~/.ssh/rancher-spike.pem ubuntu@<PUBLIC_IP> "sudo docker logs rancher 2>&1 | grep 'Bootstrap Password:'"
-```
+**A2 and A3. Set up Rancher and the agent's identity (you, one script).** `configure_spike_rancher.py <public IP>`:
 
-Open `https://<PUBLIC_IP>`, accept the self-signed certificate warning, paste the bootstrap password, set your admin password, and keep `https://<PUBLIC_IP>` as the server URL.
+- waits until Rancher has finished starting. Rancher answers `/ping` minutes before its other routes, so the script waits until `/cacerts` serves Rancher's CA, saves that CA, and from then on trusts only it;
+- reads the generated bootstrap password from the container's log over SSH, signs in, and replaces it with a random admin password;
+- sets the server URL to `https://<public IP>`, after which Rancher's certificate names that address;
+- reuses `tools/lab/configure_rancher.py` to create the `agent-readonly` cluster role, the `sre-agent` user with `user-base` only, and the user's binding on `local`. It then issues `sre-agent` an API token that expires one day after its first use.
 
-**A3. Create the agent's read-only identity:**
+The admin password, the `sre-agent` password and the token go to your Keychain (service `rancher-spike`). Nothing secret is printed.
 
-1. In **Users & Authentication, Role Templates, Cluster**, create a role named `agent-readonly` that can `get`, `list` and `watch` pods, pod logs, events, namespaces, deployments, replica sets, services and nodes. Leave out Secrets.
-2. In **Users**, create the user `sre-agent` with the global permission **User-Base**.
-3. Add `sre-agent` as a member of the `local` cluster with the `agent-readonly` role.
-4. Sign in as `sre-agent` in a private browser window, then go to **Account & API Keys** and create an API key that expires in 1 day. Copy its bearer token.
+**A4. Test the server directly.** `rancher-ai-mcp` publishes no public image, and only v1.2.0-alpha releases have stdio mode. So build v1.2.0-alpha.5 from commit `46f49c7e4e296e003b01c05ab97fb918c733cb49` with its `package/Dockerfile`. Run it in stdio mode in a container, with the token from your Keychain as an environment variable and `SSL_CERT_FILE` pointing at Rancher's CA, so no `--insecure` is needed. `mcp_probe.py` speaks MCP to it.
 
-**A4. Test from Claude Code.** Run `rancher-ai-mcp` following its README, with `RANCHER_URL=https://<PUBLIC_IP>` and `RANCHER_TOKEN` set to the `sre-agent` token, and register it in Claude Code with `claude mcp add`. Rancher's certificate is self-signed, so check the README for how the server should trust it.
+Pass: the probe lists namespaces and pods in `local`, and Rancher refuses both a Secrets list and a pod patch with HTTP 403. The server has no delete tool, so the write test patches a pod that doesn't exist: Kubernetes checks the permission first, so a 403 means no right, and nothing can change either way. With `--read-only`, the server offers 29 tools and no write tool.
 
-Pass: Claude can list namespaces and pods in `local`, and asking it to delete a pod fails with a Rancher permission error, not only with the hook's block.
+**A5. Through AgentCore Gateway, privately (you, one script).** Run `setup_gateway.py plan`, then `setup_gateway.py apply`. It sets up:
 
-**A5. Through AgentCore Gateway:**
+- the server, built for x86 on the instance and run in HTTP mode with `--insecure --read-only` on port 9092. Outside a cluster, HTTP mode needs `--insecure`;
+- an internal load balancer with a public ACM certificate for `mcp-spike.<your domain>`, validated in your public Route 53 zone. It sits in the instance's zone and one more, and has `drop_invalid_header_fields` off, because the token's header, `R_token`, has an underscore. Only the load balancer may reach port 9092;
+- an API key credential provider that holds the token, and a gateway role that may read only that secret. For `GetResourceApiKey`, the role needs the gateway's own workload identity as well;
+- a gateway with IAM sign-in, and an MCP target at `https://mcp-spike.<your domain>/mcp` that sends the token in `R_token`. A managed VPC Lattice private endpoint carries the target's traffic to the load balancer. It takes subnets only in use1-az1, az2, az4, az5 or az6.
 
-1. Run `rancher-ai-mcp` on the instance in HTTP mode with TLS. Open its port to the internet only for this test, protected by TLS and the token.
-2. Register it as an AgentCore Gateway MCP target, and call one tool from a minimal Strands agent.
-3. Find out how the Gateway can pass the Rancher token (an API-key credential provider, OAuth, or neither), and whether it accepts a self-signed certificate. If it doesn't, give the instance a DNS name and a trusted certificate, for example with Rancher's Let's Encrypt option.
+Pass: through AWS's SigV4 proxy (`mcp-proxy-for-aws-cli` 1.8.0), `mcp_probe.py --gateway` lists the 29 tools, prefixed `rancher___`, and a tool call returns the 20 namespaces. An unsigned request gets HTTP 401. A target's `READY` status alone proves nothing: the gateway discovers tools with the caller's credentials but calls them with its own role.
 
-Record the result in ADR-0002. If the spike fails, the fallback is a generic Kubernetes MCP server with a Rancher-generated kubeconfig, which still goes through the Rancher proxy.
+Record the result in ADR-0002. Had the spike failed, the fallback was a generic Kubernetes MCP server with a Rancher-generated kubeconfig, which still goes through the Rancher proxy.
 
-**A6. Tear down (you):** terminate `rancher-spike`, then delete its security group and key pair. A `t3.large` costs about US$0.08 an hour, so a few hours of spike work cost about a dollar.
+**A6. Tear down (you).** Run `teardown.py plan`, then `teardown.py apply` in a separate block. In order, it removes:
+
+- the gateway target, the gateway and the credential provider;
+- the gateway role;
+- the listener, the load balancer and the target group;
+- the security groups;
+- the ACM certificate and its validation record;
+- the instance, its security group and its key pair;
+- the default VPC, only if it is still the default VPC and holds nothing else;
+- the Keychain items and the local files.
+
+The instance and the load balancer together cost about US$0.10 an hour while they run.
 
 ## 7. Spike B: AKS to AWS without keys (1 session, cents)
 
