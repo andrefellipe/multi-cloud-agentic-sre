@@ -1,6 +1,6 @@
 # ADR-0003: The AKS collector reaches AWS with its service-account token, through IAM's OIDC federation
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Requirements: REQ-152, REQ-024
 
@@ -53,3 +53,5 @@ You:
 - ran the test pod and reported its result.
 
 Claude's mistake: the runbook's VM size, `Standard_B2s`, which Claude chose in Phase 0, is not allowed in this subscription, so the first cluster creation failed. That attempt created only an empty resource group, and nothing in AWS.
+
+You accepted it unchanged on 2026-11-14.

@@ -257,10 +257,19 @@ Pass: `docker logs spike-c-collector` shows `claude_code.session.count`. The dat
 
 ## 9. Close Phase 0 (by 2026-11-29)
 
-- [ ] Inception approved in AI-DLC; ADR-0001 accepted
-- [ ] ADR-0002 (Rancher MCP) and ADR-0003 (AKS to AWS identity) recorded, each a pass or a chosen fallback
-- [ ] Telemetry excerpt in `docs/evidence/telemetry/`
-- [ ] Ruleset exported to `docs/evidence/rulesets/`
-- [ ] Spike resources deleted, and both budgets show no surprises
+- [x] Inception approved in AI-DLC; ADR-0001 accepted
+- [x] ADR-0002 (Rancher MCP) and ADR-0003 (AKS to AWS identity) recorded, each a pass or a chosen fallback
+- [x] Telemetry excerpt in `docs/evidence/telemetry/`
+- [x] Ruleset exported to `docs/evidence/rulesets/`
+- [x] Spike resources deleted, and both budgets show no surprises
 
-Then start Phase 1 with `/aidlc` on the first Construction unit.
+**Closed on 2026-11-14,** ahead of the gate:
+
+- ADR-0001 was accepted on 2026-11-13. ADR-0002 and ADR-0003 record passes, not fallbacks, and you accepted both on 2026-11-14.
+- `docs/evidence/` holds the ruleset (`rulesets/`), the telemetry excerpt (`telemetry/`) and the spikes' records (`spike-a/`, `spike-b/`).
+- Spikes A and B were torn down, and read-only checks found nothing left in AWS or Azure.
+- Budgets, read on 2026-11-14:
+  - AWS: `sre-lab-aws` (US$300 a month) stood at US$20.95. Most of it was the domain registration and its tax; all three spikes together cost under US$2.
+  - Azure: `sre-lab-azure` (US$50 a month, alerts at 50, 80 and 100%) sits at the billing-account scope, where the portal puts budgets for a Microsoft Customer Agreement, so it covers the subscription.
+
+Phase 1 began before this close-out: u1's pull requests 1 to 3 are merged, and pull request 4, the agent's first read through Rancher, waits for Bedrock access. Continue it with `/aidlc`.

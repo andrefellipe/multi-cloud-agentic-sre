@@ -6,7 +6,7 @@ An open, evaluated SRE agent system on AWS. It investigates incidents across Ama
 
 ## Status
 
-Current phase: **0, Inception and spikes**. Full plan: [docs/plan.md](docs/plan.md).
+Current phase: **1, Foundation on AWS**. Phase 0 closed on 2026-11-14. Full plan: [docs/plan.md](docs/plan.md).
 
 | Phase | Goal | Gate |
 | --- | --- | --- |

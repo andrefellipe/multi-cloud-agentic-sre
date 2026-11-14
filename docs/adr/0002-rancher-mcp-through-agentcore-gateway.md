@@ -1,6 +1,6 @@
 # ADR-0002: The agent reads Rancher through rancher-ai-mcp, behind AgentCore Gateway, privately
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Requirements: REQ-050 (REQ-050.1), REQ-102, REQ-103 (REQ-103.1)
 
@@ -84,3 +84,5 @@ Six of Claude's mistakes surfaced during the run. Each was fixed before the next
 - an apostrophe in a security group description;
 - the gateway role's missing workload-identity resources;
 - the teardown script called a helper with an outdated signature, and stopped before it read or deleted anything.
+
+You accepted it unchanged on 2026-11-14.
