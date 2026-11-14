@@ -86,7 +86,7 @@ resource "aws_cloudwatch_metric_alarm" "throttles" {
   }
 
   alarm_name          = "sre-lab-${each.key}-throttles"
-  alarm_description   = "The ${each.key} function was throttled; the account's Lambda concurrency limit is the shared cap until reserved concurrency is set (SC-1)."
+  alarm_description   = "The ${each.key} function was throttled at its reserved concurrency (SC-1)."
   namespace           = "AWS/Lambda"
   metric_name         = "Throttles"
   dimensions          = { FunctionName = each.value }

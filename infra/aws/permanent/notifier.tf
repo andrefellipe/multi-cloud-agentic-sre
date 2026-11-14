@@ -119,6 +119,8 @@ resource "aws_lambda_function" "notifier" {
   source_code_hash = local.package_source_hash
   memory_size      = 256
   timeout          = 30
+  # SC-1: one notice per alarm change; 2 covers an overlap.
+  reserved_concurrent_executions = 2
 
   environment {
     variables = {

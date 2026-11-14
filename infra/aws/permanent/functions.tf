@@ -12,8 +12,9 @@
 # - after they change, the apply fails until you build the matching package,
 #   instead of uploading an older one.
 # Python 3.13 on arm64, outside any VPC: the functions call only AWS endpoints
-# and Slack (PD-3). No reserved concurrency until the account's Lambda limit is
-# raised from 10: Lambda keeps 100 unreserved (SC-1).
+# and Slack (PD-3). Each function reserves its own cap (SC-1), out of the
+# account's Lambda limit of 1,000; Lambda keeps 100 of it unreserved. The limit
+# was 10 until 2026-11-13, too low to reserve any.
 
 locals {
   repo_root = "${path.module}/../../.."
